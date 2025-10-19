@@ -1,24 +1,29 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// MindCleft Haven 2.0 – Fremtidsrettet oppsett for 3D/Physics med Cannon-ES
+// ✅ MindCleft Haven – konsept 3:
+// Bruker lokal, pre-bygd Cannon-ES fysikkmotor og Three.js direkte i bundle.
+// Alt lastes fra prosjektet, ingenting hentes eksternt.
 export default defineConfig({
   plugins: [react()],
+
   server: {
-    host: true,        // Beholdt fra ditt oppsett
-    port: 5173,        // Lokal dev-port
+    host: true,   // tilgjengelig i nettverk, som tidligere
+    port: 5173,   // standardport for dev
   },
+
+  // 🔧 Forteller Vite hvilke moduler som skal pre-bundles
   optimizeDeps: {
-    include: ["three", "cannon-es"],   // Sørg for at Vite pakker disse inn
+    include: ["three", "cannon-es"],  // pakkes inn i dev og prod build
   },
+
   build: {
-    target: "esnext",                  // Moderne build for rask wasm/js
-    sourcemap: true,                   // Valgfritt, men nyttig for feilsøking
-    rollupOptions: {
-      external: [],                    // Ingen moduler holdes utenfor build
-    },
+    target: "esnext",   // moderne nettlesere + støtte for ESM
+    sourcemap: true,    // valgfritt – gjør feilsøking enklere
   },
+
+  // 🔁 For SSR og bygging i Vercel
   ssr: {
-    noExternal: ["three", "cannon-es"], // Sikrer at alt fungerer i dev/SSR
+    noExternal: ["three", "cannon-es"],  // beholdes i bundle, ikke hoppes over
   },
 });
