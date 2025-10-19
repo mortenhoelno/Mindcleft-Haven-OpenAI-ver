@@ -1,3 +1,4 @@
+// src/components/Game.jsx
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
@@ -22,6 +23,7 @@ export default function Game() {
     const LIN_DAMP = 0.95;
     const ANG_DAMP = 0.9;
 
+    // Enkel terrengfunksjon
     const heightFn = (x, z) => {
       const nx = x / 35, nz = z / 35;
       const base = Math.sin(nx) * Math.cos(nz) * 2.0;
@@ -42,6 +44,7 @@ export default function Game() {
         heights.push(row);
       }
 
+      // THREE MESH
       const geo = new THREE.PlaneGeometry(
         TERRAIN_SIZE,
         TERRAIN_SIZE,
@@ -68,11 +71,13 @@ export default function Game() {
       mesh.rotation.x = -Math.PI / 2;
       scene.add(mesh);
 
+      // CANNON HEIGHTFIELD
       const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
       const body = new CANNON.Body({ mass: 0 });
       body.addShape(shape);
       body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-      body.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
+      // Flytt og løft litt slik at det matcher Three
+      body.position.set(-TERRAIN_SIZE / 2, -0.8, TERRAIN_SIZE / 2);
       world.addBody(body);
 
       return { mesh, body };
@@ -89,20 +94,20 @@ export default function Game() {
         0.05,
         300
       );
+      camera.position.set(0, 8, 20); // Start over bakken
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.domElement.style.display = "block";
       mountRef.current.appendChild(renderer.domElement);
 
+      // Lys
       const dir = new THREE.DirectionalLight(0xffffff, 1.1);
       dir.position.set(20, 30, 10);
       scene.add(dir);
       scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
-      world = new CANNON.World({
-        gravity: new CANNON.Vec3(0, -9.82, 0),
-      });
+      // Fysikk
+      world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
       world.broadphase = new CANNON.SAPBroadphase(world);
       world.allowSleep = true;
 
@@ -110,7 +115,7 @@ export default function Game() {
       const playerMat = new CANNON.Material("player");
       const contact = new CANNON.ContactMaterial(groundMat, playerMat, {
         friction: 0.4,
-        restitution: 0.1,
+        restitution: 0.15,
       });
       world.addContactMaterial(contact);
 
@@ -119,6 +124,7 @@ export default function Game() {
       terrainBody = t.body;
       terrainBody.material = groundMat;
 
+      // Spiller
       const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
       const sphereMat = new THREE.MeshStandardMaterial({ color: 0x4488ff });
       const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
@@ -134,6 +140,7 @@ export default function Game() {
       playerBody.material = playerMat;
       world.addBody(playerBody);
 
+      // Input
       const onKey = (e, down) => {
         const k = e.key.toLowerCase();
         if (k in keys) keys[k] = down;
@@ -141,7 +148,7 @@ export default function Game() {
       window.addEventListener("keydown", (e) => onKey(e, true));
       window.addEventListener("keyup", (e) => onKey(e, false));
 
-      // ---------- ANIM LOOP ----------
+      // --- ANIMASJON ---
       const clock = new THREE.Clock();
       const step = () => {
         animId = requestAnimationFrame(step);
@@ -152,11 +159,11 @@ export default function Game() {
         if (keys.s) force.z += MOVE_FORCE;
         if (keys.a) force.x -= MOVE_FORCE;
         if (keys.d) force.x += MOVE_FORCE;
-
         playerBody.applyForce(force, playerBody.position);
+
         world.step(1 / 60, dt, 3);
 
-        // Sync mesh to physics
+        // Sync mesh med fysikk
         sphereMesh.position.copy(playerBody.position);
         sphereMesh.quaternion.copy(playerBody.quaternion);
 
@@ -173,6 +180,7 @@ export default function Game() {
       };
       step();
 
+      // Resize
       const onResize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
