@@ -11,46 +11,44 @@ export default function Game() {
     let world;
     let terrainMesh, terrainBody;
     let playerMesh, playerBody;
-    let keys = { w: false, a: false, s: false, d: false };
     let animId;
 
     // ---------- PARAMETRE ----------
-    const TERRAIN_SIZE = 200;
-    const GRID_RES = 129;
+    const TERRAIN_SIZE = 100;
+    const GRID_RES = 64;
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
-    const PLAYER_RADIUS = 0.5;
-    const MOVE_FORCE = 25;
+    const PLAYER_RADIUS = 0.8;
 
     // ---------- INIT ----------
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x88bbff);
+    scene.background = new THREE.Color(0x87ceeb); // himmelblå
 
+    // KAMERA – se ned mot sentrum
     camera = new THREE.PerspectiveCamera(
       70,
       window.innerWidth / window.innerHeight,
       0.1,
       300
     );
-    camera.position.set(0, 15, 25);
+    camera.position.set(0, 40, 40);
+    camera.lookAt(0, 0, 0);
 
+    // RENDERER
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
 
-    // Lys
-    const light = new THREE.DirectionalLight(0xffffff, 1.2);
-    light.position.set(20, 50, 10);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    // LYS
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(20, 50, 10);
+    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
     // ---------- FYSIKK ----------
     world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
     // ---------- TERRAIN ----------
-    const heightFn = (x, z) => {
-      const nx = x / 35, nz = z / 35;
-      return Math.sin(nx) * Math.cos(nz) * 2.5 + 1.0;
-    };
+    const heightFn = (x, z) => Math.sin(x / 15) * Math.cos(z / 15) * 2;
 
     const heights = [];
     for (let i = 0; i < GRID_RES; i++) {
@@ -63,7 +61,7 @@ export default function Game() {
       heights.push(row);
     }
 
-    // THREE
+    // THREE MESH
     const geo = new THREE.PlaneGeometry(
       TERRAIN_SIZE,
       TERRAIN_SIZE,
@@ -81,74 +79,32 @@ export default function Game() {
     geo.computeVertexNormals();
 
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x227722,
+      color: 0x228833,
       flatShading: true,
     });
     terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.rotation.x = -Math.PI / 2;
+    terrainMesh.position.y = 0;
     scene.add(terrainMesh);
 
-    // Cannon
-    const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
-    terrainBody = new CANNON.Body({ mass: 0 });
-    terrainBody.addShape(shape);
-    terrainBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    terrainBody.position.set(-TERRAIN_SIZE / 2, -1, TERRAIN_SIZE / 2);
-    world.addBody(terrainBody);
+    // HJELPESYMBOL – et rødt kryss på sentrum
+    const cross = new THREE.AxesHelper(5);
+    scene.add(cross);
 
-    // ---------- SPILLER ----------
-    const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
-    const sphereMat = new THREE.MeshStandardMaterial({ color: 0x4488ff });
-    playerMesh = new THREE.Mesh(sphereGeo, sphereMat);
+    // ---------- BALL ----------
+    const ballGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
+    const ballMat = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+    playerMesh = new THREE.Mesh(ballGeo, ballMat);
+    playerMesh.position.set(0, 10, 0);
     scene.add(playerMesh);
 
-    playerBody = new CANNON.Body({
-      mass: 1,
-      shape: new CANNON.Sphere(PLAYER_RADIUS),
-      position: new CANNON.Vec3(0, 15, 0),
-      linearDamping: 0.4,
-      angularDamping: 0.4,
-    });
-    world.addBody(playerBody);
-
-    // ---------- INPUT ----------
-    const onKey = (e, down) => {
-      const k = e.key.toLowerCase();
-      if (k in keys) keys[k] = down;
-    };
-    window.addEventListener("keydown", (e) => onKey(e, true));
-    window.addEventListener("keyup", (e) => onKey(e, false));
-
-    // ---------- ANIM LOOP ----------
+    // ---------- LOOP ----------
     const clock = new THREE.Clock();
     const step = () => {
       animId = requestAnimationFrame(step);
-      const dt = Math.min(clock.getDelta(), 0.05);
+      const dt = clock.getDelta();
 
-      // Bevegelse
-      const force = new CANNON.Vec3(0, 0, 0);
-      if (keys.w) force.z -= MOVE_FORCE;
-      if (keys.s) force.z += MOVE_FORCE;
-      if (keys.a) force.x -= MOVE_FORCE;
-      if (keys.d) force.x += MOVE_FORCE;
-      playerBody.applyForce(force, playerBody.position);
-
-      world.step(1 / 60, dt, 3);
-
-      // Sync
-      playerMesh.position.copy(playerBody.position);
-
-      // Kamera
-      camera.position.lerp(
-        new THREE.Vector3(
-          playerBody.position.x,
-          playerBody.position.y + 8,
-          playerBody.position.z + 15
-        ),
-        0.05
-      );
-      camera.lookAt(playerBody.position);
-
+      playerMesh.rotation.y += dt * 0.5;
       renderer.render(scene, camera);
     };
     step();
@@ -156,8 +112,6 @@ export default function Game() {
     // ---------- CLEANUP ----------
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup", onKey);
       mountRef.current.removeChild(renderer.domElement);
       renderer.dispose();
     };
