@@ -18,7 +18,7 @@ export default function Game() {
 
     // --- Camera ---
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
-    camera.position.set(0, 1.9, 4);
+    camera.position.set(0, 1.29, 7);
 
     // --- Lights ---
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
