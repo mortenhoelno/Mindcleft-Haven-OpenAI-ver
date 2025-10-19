@@ -19,17 +19,17 @@ export default function Game() {
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
     const PLAYER_RADIUS = 0.8;
 
-    // Høydefunksjon
+    // Enkel høydefunksjon
     const heightFn = (x, z) => {
       const nx = x / 15;
       const nz = z / 15;
       const base = Math.sin(nx) * Math.cos(nz) * 2.5;
       const detail = Math.sin(nx * 2.5 + nz * 1.8) * 0.7;
-      return base + detail + 2; // offset slik at alt er over y=0
+      return base + detail + 2;
     };
 
+    // ---------- TERRAIN ----------
     const buildTerrain = () => {
-      // --- bygg høyder ---
       const heights = [];
       for (let i = 0; i < GRID_RES; i++) {
         const row = [];
@@ -70,8 +70,12 @@ export default function Game() {
       const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
       const body = new CANNON.Body({ mass: 0 });
       body.addShape(shape);
-      body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-      body.position.set(-TERRAIN_SIZE / 2, 0, -TERRAIN_SIZE / 2); // 🔧 FIXED
+
+      // 🔧 Basert på analyse: denne posisjonen matcher best
+      //   - X forskjøvet halvt terreng til venstre (Cannon starter i hjørne)
+      //   - Z forskjøvet halvt terreng bakover (Cannon starter i hjørne)
+      //   - Y beholdt 0, for å matche plane rotasjonen
+      body.position.set(-TERRAIN_SIZE / 2, 0, -TERRAIN_SIZE / 2);
       world.addBody(body);
 
       return { mesh, body };
@@ -81,7 +85,6 @@ export default function Game() {
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87ceeb);
 
-      // Kamera
       camera = new THREE.PerspectiveCamera(
         70,
         window.innerWidth / window.innerHeight,
@@ -90,13 +93,11 @@ export default function Game() {
       );
       camera.position.set(0, 20, 25);
 
-      // Lys
       const dirLight = new THREE.DirectionalLight(0xffffff, 1);
       dirLight.position.set(20, 50, 10);
       scene.add(dirLight);
       scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-      // Renderer
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       mountRef.current.appendChild(renderer.domElement);
@@ -112,16 +113,14 @@ export default function Game() {
       world.broadphase = new CANNON.SAPBroadphase(world);
       world.allowSleep = true;
 
-      // Materialer
       const groundMat = new CANNON.Material("ground");
       const playerMat = new CANNON.Material("player");
       const contact = new CANNON.ContactMaterial(groundMat, playerMat, {
-        friction: 0.4,
-        restitution: 0.3,
+        friction: 0.5,
+        restitution: 0.2,
       });
       world.addContactMaterial(contact);
 
-      // Terreng
       const t = buildTerrain();
       terrainMesh = t.mesh;
       terrainBody = t.body;
@@ -136,19 +135,18 @@ export default function Game() {
       playerBody = new CANNON.Body({
         mass: 1,
         shape: new CANNON.Sphere(PLAYER_RADIUS),
-        position: new CANNON.Vec3(0, 15, 0),
+        position: new CANNON.Vec3(0, 10, 0),
       });
       playerBody.material = playerMat;
       world.addBody(playerBody);
 
-      // --- Animation ---
       const clock = new THREE.Clock();
-
       const animate = () => {
         animId = requestAnimationFrame(animate);
         const dt = Math.min(clock.getDelta(), 0.05);
 
         world.step(1 / 60, dt, 3);
+
         sphereMesh.position.copy(playerBody.position);
         sphereMesh.quaternion.copy(playerBody.quaternion);
 
@@ -156,7 +154,7 @@ export default function Game() {
 
         renderer.render(scene, camera);
 
-        // Oppdater debug-data
+        // Oppdater debug
         setDebug({
           cam: `Cam: x=${camera.position.x.toFixed(1)} y=${camera.position.y.toFixed(1)} z=${camera.position.z.toFixed(1)}`,
           ball: `Ball: x=${playerBody.position.x.toFixed(1)} y=${playerBody.position.y.toFixed(1)} z=${playerBody.position.z.toFixed(1)}`,
@@ -164,7 +162,6 @@ export default function Game() {
       };
       animate();
 
-      // Resize
       const onResize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -190,11 +187,7 @@ export default function Game() {
     <>
       <div
         ref={mountRef}
-        style={{
-          width: "100vw",
-          height: "100vh",
-          overflow: "hidden",
-        }}
+        style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
       />
       <div
         style={{
