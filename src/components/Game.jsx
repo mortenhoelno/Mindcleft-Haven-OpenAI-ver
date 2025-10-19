@@ -1,41 +1,35 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
-import CannonDebugger from "cannon-es-debugger";
 
 export default function Game() {
   const mountRef = useRef(null);
+  const [debug, setDebug] = useState({ cam: "", ball: "" });
 
   useEffect(() => {
     let scene, camera, renderer;
     let world;
     let terrainMesh, terrainBody;
-    let playerBody, sphereMesh;
-    let keys = { w: false, a: false, s: false, d: false };
+    let playerBody;
     let animId;
-    let cannonDebugger;
 
     // ---------- PARAMETRE ----------
-    const TERRAIN_SIZE = 200;
-    const GRID_RES = 129;
+    const TERRAIN_SIZE = 100;
+    const GRID_RES = 65;
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
-    const PLAYER_RADIUS = 0.5;
-    const MOVE_FORCE = 25;
-    const LIN_DAMP = 0.95;
-    const ANG_DAMP = 0.9;
+    const PLAYER_RADIUS = 0.8;
 
-    // ---------- HØYDEFUNKSJON ----------
+    // Høydefunksjon
     const heightFn = (x, z) => {
-      const nx = x / 35,
-        nz = z / 35;
-      const base = Math.sin(nx) * Math.cos(nz) * 2.0;
-      const ripples = Math.sin(nx * 2.7 + nz * 1.9) * 0.6;
-      const bias = 0.8;
-      return base + ripples + bias;
+      const nx = x / 15;
+      const nz = z / 15;
+      const base = Math.sin(nx) * Math.cos(nz) * 2.5;
+      const detail = Math.sin(nx * 2.5 + nz * 1.8) * 0.7;
+      return base + detail + 2; // offset slik at vi ser alt over y=0
     };
 
-    // ---------- BYGG TERRENG ----------
     const buildTerrain = () => {
+      // --- bygg høyder ---
       const heights = [];
       for (let i = 0; i < GRID_RES; i++) {
         const row = [];
@@ -47,7 +41,7 @@ export default function Game() {
         heights.push(row);
       }
 
-      // Three.js mesh
+      // --- THREE mesh ---
       const geo = new THREE.PlaneGeometry(
         TERRAIN_SIZE,
         TERRAIN_SIZE,
@@ -65,68 +59,65 @@ export default function Game() {
       geo.computeVertexNormals();
 
       const mat = new THREE.MeshStandardMaterial({
-        color: 0x336633,
+        color: 0x339933,
         flatShading: true,
-        roughness: 1,
-        metalness: 0,
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.rotation.x = -Math.PI / 2;
-      mesh.receiveShadow = true;
       scene.add(mesh);
 
-      // Cannon Heightfield
+      // --- Cannon heightfield ---
       const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
       const body = new CANNON.Body({ mass: 0 });
       body.addShape(shape);
-
-      // 🎯 Presis justering (funnet fra sannsynlighetsmodell)
-      const degToRad = Math.PI / 180;
-      body.quaternion.setFromEuler(-91 * degToRad, 0, 0);
-      body.position.set(-TERRAIN_SIZE / 2, -0.8, TERRAIN_SIZE / 2);
-
+      body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+      body.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
       world.addBody(body);
+
       return { mesh, body };
     };
 
-    // ---------- INIT ----------
     const init = () => {
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x20242e);
-      scene.fog = new THREE.Fog(0x20242e, 30, 120);
+      scene.background = new THREE.Color(0x87ceeb);
 
+      // Kamera
       camera = new THREE.PerspectiveCamera(
         70,
         window.innerWidth / window.innerHeight,
-        0.05,
-        300
+        0.1,
+        500
       );
-
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.domElement.style.display = "block";
-      mountRef.current.appendChild(renderer.domElement);
+      camera.position.set(0, 20, 25);
 
       // Lys
-      const dir = new THREE.DirectionalLight(0xffffff, 1.1);
-      dir.position.set(20, 30, 10);
-      scene.add(dir);
-      scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+      dirLight.position.set(20, 50, 10);
+      scene.add(dirLight);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-      // AxesHelper for debugging
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      mountRef.current.appendChild(renderer.domElement);
+
+      // Hjelpere
       const axes = new THREE.AxesHelper(10);
       scene.add(axes);
+      const grid = new THREE.GridHelper(100, 50, 0x000000, 0x000000);
+      scene.add(grid);
 
-      // ---------- CANNON ----------
+      // Fysikk
       world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
       world.broadphase = new CANNON.SAPBroadphase(world);
       world.allowSleep = true;
 
+      // Materialer
       const groundMat = new CANNON.Material("ground");
       const playerMat = new CANNON.Material("player");
       const contact = new CANNON.ContactMaterial(groundMat, playerMat, {
         friction: 0.4,
-        restitution: 0.1,
+        restitution: 0.3,
       });
       world.addContactMaterial(contact);
 
@@ -136,70 +127,44 @@ export default function Game() {
       terrainBody = t.body;
       terrainBody.material = groundMat;
 
-      // Debug wireframe for Cannon
-      cannonDebugger = new CannonDebugger(scene, world, { color: 0xff0000 });
-
-      // Spiller (kule)
+      // Kule
       const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
       const sphereMat = new THREE.MeshStandardMaterial({ color: 0x4488ff });
-      sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+      const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
       scene.add(sphereMesh);
 
       playerBody = new CANNON.Body({
         mass: 1,
         shape: new CANNON.Sphere(PLAYER_RADIUS),
-        linearDamping: 1 - LIN_DAMP,
-        angularDamping: 1 - ANG_DAMP,
-        position: new CANNON.Vec3(0, 10, 0),
+        position: new CANNON.Vec3(0, 15, 0),
       });
       playerBody.material = playerMat;
       world.addBody(playerBody);
 
-      // ---------- INPUT ----------
-      const onKey = (e, down) => {
-        const k = e.key.toLowerCase();
-        if (k in keys) keys[k] = down;
-      };
-      window.addEventListener("keydown", (e) => onKey(e, true));
-      window.addEventListener("keyup", (e) => onKey(e, false));
-
-      // ---------- ANIMASJON ----------
+      // --- Animation ---
       const clock = new THREE.Clock();
-      const step = () => {
-        animId = requestAnimationFrame(step);
+
+      const animate = () => {
+        animId = requestAnimationFrame(animate);
         const dt = Math.min(clock.getDelta(), 0.05);
 
-        // Input → kraft
-        const force = new CANNON.Vec3(0, 0, 0);
-        if (keys.w) force.z -= MOVE_FORCE;
-        if (keys.s) force.z += MOVE_FORCE;
-        if (keys.a) force.x -= MOVE_FORCE;
-        if (keys.d) force.x += MOVE_FORCE;
-        playerBody.applyForce(force, playerBody.position);
-
         world.step(1 / 60, dt, 3);
-
-        // Sync spiller
         sphereMesh.position.copy(playerBody.position);
         sphereMesh.quaternion.copy(playerBody.quaternion);
 
-        // Kamera følger bakfra
-        const camTarget = new THREE.Vector3(
-          playerBody.position.x,
-          playerBody.position.y + 2,
-          playerBody.position.z + 6
-        );
-        camera.position.lerp(camTarget, 0.05);
         camera.lookAt(playerBody.position);
 
-        // Oppdater debugger
-        cannonDebugger.update();
-
         renderer.render(scene, camera);
-      };
-      step();
 
-      // ---------- RESIZE ----------
+        // Oppdater debug-data
+        setDebug({
+          cam: `Cam: x=${camera.position.x.toFixed(1)} y=${camera.position.y.toFixed(1)} z=${camera.position.z.toFixed(1)}`,
+          ball: `Ball: x=${playerBody.position.x.toFixed(1)} y=${playerBody.position.y.toFixed(1)} z=${playerBody.position.z.toFixed(1)}`,
+        });
+      };
+      animate();
+
+      // Resize
       const onResize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -207,7 +172,6 @@ export default function Game() {
       };
       window.addEventListener("resize", onResize);
 
-      // ---------- CLEANUP ----------
       return () => {
         cancelAnimationFrame(animId);
         window.removeEventListener("resize", onResize);
@@ -223,9 +187,32 @@ export default function Game() {
   }, []);
 
   return (
-    <div
-      ref={mountRef}
-      style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
-    />
+    <>
+      <div
+        ref={mountRef}
+        style={{
+          width: "100vw",
+          height: "100vh",
+          overflow: "hidden",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: 10,
+          left: 10,
+          color: "white",
+          background: "rgba(0,0,0,0.5)",
+          padding: "6px 10px",
+          borderRadius: "4px",
+          fontFamily: "monospace",
+          fontSize: "12px",
+        }}
+      >
+        <div>{debug.cam}</div>
+        <div>{debug.ball}</div>
+      </div>
+    </>
   );
 }
+
