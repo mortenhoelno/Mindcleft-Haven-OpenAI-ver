@@ -1,167 +1,134 @@
-import React, { useEffect, useRef } from "react";
-import * as THREE from "three";
-import * as CANNON from "cannon-es";
+import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
+import { useEffect } from 'react';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export default function Game() {
-  const mountRef = useRef(null);
-
   useEffect(() => {
-    let scene, camera, renderer;
-    let world;
-    let terrainMesh, hfBody;
-    let playerBody, playerMesh;
-    let animId;
-    let direction = 1;
+    // === SCENE & CAMERA ===
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // blå himmel
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+    camera.position.set(0, 60, 120);
 
-    // ---------- PARAMETRE ----------
-    const TERRAIN_SIZE = 100;
-    const GRID_RES = 64;
-    const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
-    const PLAYER_RADIUS = 1;
-
-    // ---------- HØYDEFUNKSJON ----------
-    const heightFn = (x, z) => {
-      const r = Math.sqrt(x * x + z * z);
-      const h = Math.max(0, 8 - r * 0.15); // Fjell i midten
-      return h;
-    };
-
-    // ---------- SCENE OG KAMERA ----------
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x88bbff); // blå himmel
-
-    camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      500
-    );
-    camera.position.set(0, 25, 40);
-    camera.lookAt(0, 0, 0);
-
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    mountRef.current.appendChild(renderer.domElement);
+    document.body.appendChild(renderer.domElement);
 
-    // Lys
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(10, 20, 10);
-    scene.add(dirLight);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
 
-    // ---------- FYSIKK ----------
-    world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-    world.broadphase = new CANNON.SAPBroadphase(world);
-    world.allowSleep = false;
+    // === LYS ===
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(100, 200, 100);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x888888));
 
-    // Materialer
-    const groundMat = new CANNON.Material("ground");
-    const ballMat = new CANNON.Material("ball");
+    // === VERDIER ===
+    const TERRAIN_SIZE = 200;
+    const RES = 32;
+    const ELEM = TERRAIN_SIZE / RES;
 
-    world.addContactMaterial(
-      new CANNON.ContactMaterial(groundMat, ballMat, {
-        friction: 0.4,
-        restitution: 0.05,
-      })
-    );
-
-    // ---------- TERRÆN ----------
+    // === GENERER HØYDEVERDIER ===
     const heights = [];
-    for (let i = 0; i < GRID_RES; i++) {
-      const row = [];
-      for (let j = 0; j < GRID_RES; j++) {
-        const x = -TERRAIN_SIZE / 2 + j * ELEM;
-        const z = -TERRAIN_SIZE / 2 + i * ELEM;
-        row.push(heightFn(x, z));
+    for (let i = 0; i < RES; i++) {
+      heights.push([]);
+      for (let j = 0; j < RES; j++) {
+        const x = (i / RES) * Math.PI * 2;
+        const y = (j / RES) * Math.PI * 2;
+        heights[i].push(Math.sin(x) * Math.cos(y) * 5);
       }
-      heights.push(row);
     }
 
-    // THREE.js mesh
-    const geo = new THREE.PlaneGeometry(
-      TERRAIN_SIZE,
-      TERRAIN_SIZE,
-      GRID_RES - 1,
-      GRID_RES - 1
-    );
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i);
-      const vy = pos.getY(i);
-      pos.setZ(i, heightFn(vx, vy));
+    // === THREE.JS TERRAIN (VISUELL) ===
+    const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, RES - 1, RES - 1);
+    for (let i = 0; i < geo.attributes.position.count; i++) {
+      const ix = i % RES;
+      const iz = Math.floor(i / RES);
+      geo.attributes.position.setY(i, heights[ix][iz]);
     }
-    pos.needsUpdate = true;
     geo.computeVertexNormals();
-
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x336633,
+    const mat = new THREE.MeshPhongMaterial({
+      color: 0x004400,
       wireframe: true,
     });
-    terrainMesh = new THREE.Mesh(geo, mat);
+    const terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.rotation.x = -Math.PI / 2;
     scene.add(terrainMesh);
 
-    // Rutenett
-    const grid = new THREE.GridHelper(200, 40, 0xff4400, 0xaa0000);
-    grid.rotation.x = 0;
-    grid.position.y = 0.05;
+    // === GRIDHELPER ===
+    const grid = new THREE.GridHelper(TERRAIN_SIZE * 3, 80, 0xff0000, 0xff8800);
+    grid.position.y = 0;
     scene.add(grid);
 
-    // Cannon heightfield
+    // === CANNON VERDEN ===
+    const world = new CANNON.World();
+    world.gravity.set(0, -9.82, 0);
+
+    const groundMat = new CANNON.Material('groundMat');
     const hfShape = new CANNON.Heightfield(heights, { elementSize: ELEM });
-    hfBody = new CANNON.Body({ mass: 0, material: groundMat });
+    const hfBody = new CANNON.Body({ mass: 0, material: groundMat });
     hfBody.addShape(hfShape);
-    hfBody.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
-    hfBody.quaternion.setFromEuler(Math.PI / 2, 0, 0);
+    hfBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    hfBody.position.set(-TERRAIN_SIZE / 2, -0.1, TERRAIN_SIZE / 2);
     world.addBody(hfBody);
 
-    // ---------- BALL ----------
-    const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
-    const sphereMat = new THREE.MeshStandardMaterial({ color: 0x2266ff });
-    playerMesh = new THREE.Mesh(sphereGeo, sphereMat);
-    scene.add(playerMesh);
+    // === DEBUG-VISUALISERING AV CANNON HEIGHTFIELD ===
+    const hfGroup = new THREE.Group();
+    for (let i = 0; i < RES; i++) {
+      for (let j = 0; j < RES; j++) {
+        const h = heights[i][j];
+        const px = i * ELEM - TERRAIN_SIZE / 2;
+        const pz = j * ELEM - TERRAIN_SIZE / 2;
+        const geom = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(px, 0, pz),
+          new THREE.Vector3(px, h, pz),
+        ]);
+        const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0xff0000 }));
+        hfGroup.add(line);
+      }
+    }
+    scene.add(hfGroup);
 
-    playerBody = new CANNON.Body({
-      mass: 2,
-      shape: new CANNON.Sphere(PLAYER_RADIUS),
-      material: ballMat,
-      linearDamping: 0.25,
-      angularDamping: 0.35,
-      position: new CANNON.Vec3(0, PLAYER_RADIUS + 0.2 + 10, 0),
-    });
-    world.addBody(playerBody);
+    // === BALL ===
+    const ballShape = new CANNON.Sphere(2);
+    const ballBody = new CANNON.Body({ mass: 1 });
+    ballBody.addShape(ballShape);
+    ballBody.position.set(0, 40, 0);
+    world.addBody(ballBody);
 
-    // ---------- ANIMASJON ----------
+    const ballMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(2, 32, 32),
+      new THREE.MeshPhongMaterial({ color: 0x0000ff })
+    );
+    scene.add(ballMesh);
+
+    // === ANIMASJON ===
     const clock = new THREE.Clock();
-    const animate = () => {
-      animId = requestAnimationFrame(animate);
-      const dt = Math.min(clock.getDelta(), 0.05);
-      world.step(1 / 60, dt, 3); // 3 substeps
+    function animate() {
+      const dt = clock.getDelta();
+      world.step(1 / 60, dt, 3);
 
-      // Enkel rullebevegelse
-      playerBody.velocity.x = direction * 3;
-      if (playerBody.position.x > 20) direction = -1;
-      if (playerBody.position.x < -20) direction = 1;
+      ballMesh.position.copy(ballBody.position);
+      ballMesh.quaternion.copy(ballBody.quaternion);
 
-      playerMesh.position.copy(playerBody.position);
-      playerMesh.quaternion.copy(playerBody.quaternion);
-
+      controls.update();
       renderer.render(scene, camera);
-    };
+      requestAnimationFrame(animate);
+    }
+
     animate();
 
-    // ---------- CLEANUP ----------
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
     return () => {
-      cancelAnimationFrame(animId);
-      mountRef.current.removeChild(renderer.domElement);
-      renderer.dispose();
+      document.body.removeChild(renderer.domElement);
     };
   }, []);
 
-  return (
-    <div
-      ref={mountRef}
-      style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
-    />
-  );
+  return null;
 }
