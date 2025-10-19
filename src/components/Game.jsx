@@ -25,7 +25,7 @@ export default function Game() {
       const nz = z / 15;
       const base = Math.sin(nx) * Math.cos(nz) * 2.5;
       const detail = Math.sin(nx * 2.5 + nz * 1.8) * 0.7;
-      return base + detail + 2; // offset slik at vi ser alt over y=0
+      return base + detail + 2; // offset slik at alt er over y=0
     };
 
     const buildTerrain = () => {
@@ -71,7 +71,7 @@ export default function Game() {
       const body = new CANNON.Body({ mass: 0 });
       body.addShape(shape);
       body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-      body.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
+      body.position.set(-TERRAIN_SIZE / 2, 0, -TERRAIN_SIZE / 2); // 🔧 FIXED
       world.addBody(body);
 
       return { mesh, body };
@@ -215,4 +215,3 @@ export default function Game() {
     </>
   );
 }
-
