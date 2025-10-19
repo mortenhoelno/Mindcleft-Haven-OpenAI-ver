@@ -1,0 +1,15 @@
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: #111; /* matcher Game clearColor */
+  overflow: hidden;
+  touch-action: none; /* mindre scroll-accident på mobil */
+}
+
+canvas {
+  display: block;        /* fjern default inline gap */
+  width: 100vw !important;
+  height: 100vh !important;
+}
