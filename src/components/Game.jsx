@@ -17,6 +17,7 @@ export default function Game() {
     const GRID_RES = 128;
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
     const PLAYER_RADIUS = 1;
+    const TERRAIN_HEIGHT_OFFSET = 2.0; // ← LØFT BAKKEN
 
     const heightFn = (x, z) => {
       const nx = x / 35, nz = z / 35;
@@ -24,7 +25,6 @@ export default function Game() {
     };
 
     const buildTerrain = () => {
-      // Høydefeltdata
       const heights = [];
       for (let i = 0; i < GRID_RES; i++) {
         const row = [];
@@ -36,7 +36,6 @@ export default function Game() {
         heights.push(row);
       }
 
-      // THREE-geometry
       const geo = new THREE.PlaneGeometry(
         TERRAIN_SIZE,
         TERRAIN_SIZE,
@@ -66,51 +65,39 @@ export default function Game() {
       const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
       const body = new CANNON.Body({ mass: 0 });
 
-      // 🔒 Riktig rekkefølge (viktig!)
+      // 🔒 Riktig rekkefølge
       body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
       body.addShape(shape);
-      body.position.set(-TERRAIN_SIZE / 2, 0, -TERRAIN_SIZE / 2);
+      body.position.set(-TERRAIN_SIZE / 2, TERRAIN_HEIGHT_OFFSET, -TERRAIN_SIZE / 2);
 
       world.addBody(body);
       return { mesh, body };
     };
 
     const init = () => {
-      // SCENE
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87ceeb);
 
-      // KAMERA (låst perspektiv)
-      camera = new THREE.PerspectiveCamera(
-        70,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        300
-      );
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 300);
       camera.position.set(0, 40, 60);
       camera.lookAt(0, 0, 0);
 
-      // RENDERER
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       mountRef.current.appendChild(renderer.domElement);
 
-      // LYS
       const dir = new THREE.DirectionalLight(0xffffff, 1.2);
       dir.position.set(20, 40, 20);
       scene.add(dir);
       scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-      // WORLD
       world = new CANNON.World();
       world.gravity.set(0, -9.82, 0);
 
-      // TERRAIN
       const t = buildTerrain();
       terrainMesh = t.mesh;
       terrainBody = t.body;
 
-      // BALL
       const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
       const sphereMat = new THREE.MeshStandardMaterial({ color: 0x4488ff });
       sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
@@ -125,21 +112,17 @@ export default function Game() {
       });
       world.addBody(playerBody);
 
-      // RUTENETT (visuell referanse)
       const grid = new THREE.GridHelper(TERRAIN_SIZE * 2, GRID_RES, 0xff6600, 0xaa0000);
       grid.position.y = 0.05;
       scene.add(grid);
 
-      // ANIMASJON
       const clock = new THREE.Clock();
       const animate = () => {
         animId = requestAnimationFrame(animate);
         const dt = Math.min(clock.getDelta(), 0.05);
         world.step(1 / 60, dt);
-
         sphereMesh.position.copy(playerBody.position);
         sphereMesh.quaternion.copy(playerBody.quaternion);
-
         renderer.render(scene, camera);
       };
       animate();
