@@ -14,9 +14,15 @@ export default function Game() {
 
     const init = async () => {
       try {
-        const RAPIER = (await import(
-  /* @vite-ignore */ "/node_modules/@dimforge/rapier3d-compat/rapier.js"
-)).default;
+        // --- Dynamisk import som fungerer både lokalt og i Vercel ---
+        const RAPIER = (
+          await import(
+            /* @vite-ignore */ new URL(
+              "../node_modules/@dimforge/rapier3d-compat/rapier.js",
+              import.meta.url
+            ).href
+          )
+        ).default;
 
         await RAPIER.init();
         console.log("✅ Rapier initialized successfully");
@@ -37,7 +43,7 @@ export default function Game() {
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         mountRef.current.appendChild(renderer.domElement);
 
-        // Lights
+        // --- LIGHTS ---
         const light = new THREE.DirectionalLight(0xffffff, 1.2);
         light.position.set(5, 10, 7.5);
         scene.add(light);
@@ -45,7 +51,7 @@ export default function Game() {
         const ambient = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambient);
 
-        // OrbitControls
+        // --- ORBIT CONTROLS ---
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.enablePan = false;
@@ -180,12 +186,25 @@ export default function Game() {
         };
       } catch (err) {
         console.error("❌ Error initializing Rapier or scene:", err);
+
+        // --- VISUELL FALLBACK ---
+        if (mountRef.current) {
+          mountRef.current.innerHTML = `
+            <div style="
+              color: white;
+              background: #222;
+              padding: 20px;
+              font-family: monospace;
+            ">
+              ⚠️ Rapier physics engine failed to load.<br>
+              Check network or rebuild the project.
+            </div>
+          `;
+        }
       }
     };
 
     init();
-
-    return () => {};
   }, []);
 
   return <div ref={mountRef} style={{ width: "100vw", height: "100vh" }} />;
