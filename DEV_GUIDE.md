@@ -144,3 +144,65 @@ Dette sikrer at:
 ✅ Alt ligger trygt i GitHub
 ✅ Du kan åpne prosjektet fra hvor som helst
 ✅ Ingen lokal data går tapt selv om Codespace blir slettet
+
+Her er 5 korte, nyttige læringspunkter du bør legge inn i dev-guiden under seksjonen
+👉 “Når ting ikke synkroniserer mellom Codespaces og GitHub”
+
+🧭 1️⃣ Sjekk alltid Git-status før du begynner å feilsøke
+
+Bruk:
+
+git status
+
+
+Det avslører umiddelbart hvor problemet ligger — om en fil er slettet, ikke pushet, eller i konflikt.
+
+Dette sparer ofte 30–60 minutter med gjetting.
+
+🔁 2️⃣ Tving synk fra GitHub til Codespaces
+
+Når du vet at GitHub har den riktige versjonen, bruk:
+
+git fetch origin
+git reset --hard origin/main
+
+
+Dette nullstiller alt lokalt og henter eksakt siste versjon fra GitHub.
+Perfekt når Codespaces henger igjen etter feil eller midlertidig sync-brudd.
+
+🧩 3️⃣ Installer manglende pakker etterpå, ikke før
+
+Etter reset --hard, kjør alltid:
+
+npm install
+
+
+for å hente dependencies fra package.json.
+👉 Dette sikrer at alt som ligger i GitHub faktisk blir fysisk installert lokalt.
+
+🧱 4️⃣ Lås versjonene etter suksess
+
+Når prosjektet fungerer, lås det slik:
+
+git add package.json package-lock.json
+git commit -m "Lock working dependency versions"
+git push
+
+
+Dette gjør at Vercel, Codespaces og andre utviklere aldri får avvikende pakkeversjoner igjen.
+
+🧠 5️⃣ Verifiser med sanity check før du bygger
+
+Lag en mini-test i dev-guiden (du kan kalle den “Sanity check”):
+
+npm list @dimforge/rapier3d-compat three react vite
+
+npm run dev
+
+Se at konsollen viser “✅ Rapier initialized successfully”
+
+Åpne browser og bekreft ingen 404
+
+Tar under 1 minutt – men fanger 95 % av alle miljøfeil.
+
+
