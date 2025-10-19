@@ -136,6 +136,77 @@ Etter dette går vi til:
 ## 🧾 Sist oppdatert
 🧠 19. oktober 2025 – Node-versjon og Vite-feil løst
 ---------------------------------------------------
+
+🧠 Den standarden jeg kommer til å foreslå neste uke også:
+
+(og som du bør bruke nå)
+
+🔹 Språk og struktur
+
+React 19 + Vite 7 (du har det allerede — perfekt)
+
+.jsx for komponenter
+
+ES Modules (import/export)
+
+mappestruktur som speiler domenet, ikke teknologien
+
+📁 Anbefalt struktur (klar for vekst og integrasjon)
+/Mindcleft-Haven-OpenAI-ver
+│
+├── index.html
+├── vite.config.js
+├── package.json
+│
+├── src/
+│   ├── main.jsx               ← Inngangspunktet (renderer App)
+│   ├── App.jsx                ← Hovedkomponenten
+│   ├── styles.css             ← Grunnstil
+│   │
+│   ├── components/            ← Visuelle eller logiske byggeklosser
+│   │   ├── Game.jsx           ← Three.js + Rapier motor
+│   │   ├── Loading.jsx        ← Vises mens motoren starter
+│   │   └── HUD.jsx            ← UI-overlay, healthbar osv.
+│   │
+│   ├── systems/               ← “Motor”-kode
+│   │   ├── physics.js         ← Init og styring av Rapier
+│   │   ├── scene.js           ← Three.js scene-setup
+│   │   └── controls.js        ← Input og bevegelse
+│   │
+│   ├── assets/                ← Teksturer, modeller, lyder
+│   │   ├── models/
+│   │   └── textures/
+│   │
+│   ├── hooks/                 ← Reusable logikk (f.eks. useKeyboard, usePlayer)
+│   ├── utils/                 ← Små hjelpefunksjoner (random, math osv.)
+│   └── state/                 ← Zustand/Context/Supabase-tilkobling
+│
+└── README.md
+
+⚙️ Standard konvensjoner
+Element	Hva	Hvorfor
+.jsx	Alle React-komponenter	JSX-optimalisering og fremtidig React 20-støtte
+.js	Systemfiler uten JSX	Tydelig skille mellom visuell og logisk kode
+CSS Modules eller Tailwind (senere)	Styling	For lettere skalering
+Vite + React plugin	Bundling	Lynrask bygging og hot reload
+NPM + ESM + Supabase	Eksterne systemer	Enkelt å integrere backend, lagring og AI senere
+💡 Fremtidig utvikling (du er forberedt på dette)
+
+React 19 vil gjøre Server Components vanlige → Vite støtter det.
+
+WebGPU vil gradvis erstatte WebGL → Three.js bygger bro mot det.
+
+Supabase og RAG (AI-integrasjon) vil kreve modulært oppsett → du har det allerede.
+
+NPM → Bun/Yarn 4 vil komme, men Vite håndterer alt sømløst.
+
+Kort sagt:
+✅ .jsx-konvensjon
+✅ React + Vite 7
+✅ Mappestruktur som speiler funksjon og logikk
+✅ Bygget for rask iterasjon og ekspansjon mot Supabase og AI
+
+
 Problem:
 Vite krevde Node v20.19+ eller v22.12+, men Codespaces lå låst på Node v16.20.2.
 
