@@ -28,66 +28,55 @@ export default function Game() {
       return Math.sin(nx) * Math.cos(nz) * 2.0 + 0.8;
     };
 
-    // -------- BUILD TERRAIN --------
-    const buildTerrain = () => {
-      const heights = [];
-      for (let i = 0; i < GRID_RES; i++) {
-        const row = [];
-        for (let j = 0; j < GRID_RES; j++) {
-          const x = -TERRAIN_SIZE / 2 + j * ELEM;
-          const z = -TERRAIN_SIZE / 2 + i * ELEM;
-          row.push(heightFn(x, z));
-        }
-        heights.push(row);
-      }
+   const buildTerrain = () => {
+  const heights = [];
+  for (let i = 0; i < GRID_RES; i++) {
+    const row = [];
+    for (let j = 0; j < GRID_RES; j++) {
+      const x = -TERRAIN_SIZE / 2 + j * ELEM;
+      const z = -TERRAIN_SIZE / 2 + i * ELEM;
+      row.push(heightFn(x, z));
+    }
+    heights.push(row);
+  }
 
-      // Three plane
-      const geo = new THREE.PlaneGeometry(
-        TERRAIN_SIZE,
-        TERRAIN_SIZE,
-        GRID_RES - 1,
-        GRID_RES - 1
-      );
-      const pos = geo.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const vx = pos.getX(i);
-        const vz = pos.getY(i);
-        const h = heightFn(vx, vz);
-        pos.setZ(i, h);
-      }
-      pos.needsUpdate = true;
-      geo.computeVertexNormals();
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0x336633,
-        flatShading: true,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.rotation.x = -Math.PI / 2;
+  // Three.js terreng
+  const geo = new THREE.PlaneGeometry(
+    TERRAIN_SIZE,
+    TERRAIN_SIZE,
+    GRID_RES - 1,
+    GRID_RES - 1
+  );
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const vx = pos.getX(i);
+    const vz = pos.getY(i);
+    const h = heightFn(vx, vz);
+    pos.setZ(i, h);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
 
-      // Cannon heightfield
-      const shape = new CANNON.Heightfield(heights, {
-        elementSize: ELEM,
-      });
-      const body = new CANNON.Body({ mass: 0 });
-      body.addShape(shape);
-      body.position.set(
-        -TERRAIN_SIZE / 2,
-        0,
-        -TERRAIN_SIZE / 2
-      );
-      body.material = new CANNON.Material("ground");
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x336633,
+    flatShading: true,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
 
-      // DEBUG wireframe
-      const debugGeo = new THREE.BoxGeometry(TERRAIN_SIZE, 1, TERRAIN_SIZE);
-      const debugMat = new THREE.MeshBasicMaterial({
-        color: 0xff0000,
-        wireframe: true,
-      });
-      const dbg = new THREE.Mesh(debugGeo, debugMat);
-      dbg.position.set(0, 0, 0);
+  // Cannon Heightfield
+  const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
+  const body = new CANNON.Body({ mass: 0 });
+  body.addShape(shape);
 
-      return { mesh, body, dbg };
-    };
+  // 👉 Roter slik at heightfield ligger vannrett
+  body.quaternion.setFromEuler(-Math.PI / 2, 0, 0, "XYZ");
+
+  // 👉 Flytt slik at den dekker samme område som Three-bakken
+  body.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
+
+  return { mesh, body };
+};
 
     const init = () => {
       // THREE
