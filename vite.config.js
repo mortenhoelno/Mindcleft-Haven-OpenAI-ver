@@ -1,26 +1,24 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// MindCleft Haven 2.0 – Fremtidsrettet oppsett for 3D/WASM
+// MindCleft Haven 2.0 – Fremtidsrettet oppsett for 3D/Physics med Cannon-ES
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true,       // beholdt fra ditt oppsett
-    port: 5173,       // beholdt fra ditt oppsett
+    host: true,        // Beholdt fra ditt oppsett
+    port: 5173,        // Lokal dev-port
   },
   optimizeDeps: {
-    include: ["three"],                // pakkes riktig
-    exclude: ["@dimforge/rapier3d-compat"], // Rapier lastes dynamisk i browser
+    include: ["three", "cannon-es"],   // Sørg for at Vite pakker disse inn
   },
   build: {
-    target: "esnext",                  // nødvendig for moderne WASM
-    sourcemap: true,                   // valgfritt, men nyttig for debugging
+    target: "esnext",                  // Moderne build for rask wasm/js
+    sourcemap: true,                   // Valgfritt, men nyttig for feilsøking
     rollupOptions: {
-      external: ["@dimforge/rapier3d-compat"], // hindrer bundling under build
+      external: [],                    // Ingen moduler holdes utenfor build
     },
   },
   ssr: {
-    noExternal: ["three"],             // behold three ved SSR/dev
-    external: ["@dimforge/rapier3d-compat"], // Rapier skal kun lastes i browser
+    noExternal: ["three", "cannon-es"], // Sikrer at alt fungerer i dev/SSR
   },
 });
