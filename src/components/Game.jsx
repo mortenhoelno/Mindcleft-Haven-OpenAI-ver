@@ -16,7 +16,7 @@ export default function Game() {
       0.1,
       500
     );
-    camera.position.set(0, 20, 25);
+    camera.position.set(0, 20, 35);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -33,9 +33,7 @@ export default function Game() {
     scene.add(axesHelper);
 
     // === PHYSICS WORLD ===
-    const world = new CANNON.World({
-      gravity: new CANNON.Vec3(0, -9.82, 0),
-    });
+    const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
     // === HEIGHTFIELD DATA ===
     const sizeX = 50;
@@ -51,15 +49,14 @@ export default function Game() {
       }
     }
 
-    const heightfieldShape = new CANNON.Heightfield(matrix, {
-      elementSize,
-    });
+    const heightfieldShape = new CANNON.Heightfield(matrix, { elementSize });
     const heightfieldBody = new CANNON.Body({ mass: 0 });
     heightfieldBody.addShape(heightfieldShape);
+    // ✅ sentrer heightfield slik at den matcher Three.js
     heightfieldBody.position.set(
       -((sizeX - 1) * elementSize) / 2,
       0,
-      ((sizeY - 1) * elementSize) / 2
+      -((sizeY - 1) * elementSize) / 2
     );
     heightfieldBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
     world.addBody(heightfieldBody);
@@ -82,8 +79,6 @@ export default function Game() {
     const material = new THREE.MeshBasicMaterial({
       color: 0x006400,
       wireframe: true,
-      wireframeLinewidth: 2,
-      wireframeLinecap: "round",
     });
     const terrainMesh = new THREE.Mesh(geometry, material);
     terrainMesh.rotation.x = -Math.PI / 2;
@@ -119,18 +114,17 @@ export default function Game() {
     function animate() {
       requestAnimationFrame(animate);
 
-      // Fysikk
       world.step(1 / 60);
 
-      // Rull frem og tilbake automatisk
+      // Kula ruller frem og tilbake
       ballBody.velocity.x = 3 * direction;
-      if (Math.abs(ballBody.position.x) > 15) direction *= -1;
+      if (Math.abs(ballBody.position.x) > 20) direction *= -1;
 
-      // Oppdater Three-posisjon
+      // Sync
       ballMesh.position.copy(ballBody.position);
       ballMesh.quaternion.copy(ballBody.quaternion);
 
-      // Kamera følger lett bakfra
+      // Kamera følger
       camera.position.x = ballBody.position.x;
       camera.lookAt(ballBody.position);
 
@@ -139,7 +133,6 @@ export default function Game() {
 
     animate();
 
-    // === CLEANUP ===
     return () => {
       mountRef.current.removeChild(renderer.domElement);
     };
