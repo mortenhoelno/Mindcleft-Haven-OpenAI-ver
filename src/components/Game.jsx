@@ -7,62 +7,42 @@ export default function Game() {
   const mountRef = useRef(null);
 
   useEffect(() => {
-    let animId = null;
+    let animId;
 
-    // ---------- PARAMETRE ----------
-    const TERRAIN_SIZE = 120;
-    const GRID_RES = 65; // må være n = segments + 1
+    const TERRAIN_SIZE = 60;
+    const GRID_RES = 33;
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
-    const PLAYER_RADIUS = 0.5;
 
-    // ---------- SCENE ----------
+    // --- SCENE ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x20242e);
-    scene.fog = new THREE.Fog(0x20242e, 20, 80);
-
     const camera = new THREE.PerspectiveCamera(
-      75,
+      70,
       window.innerWidth / window.innerHeight,
       0.1,
       200
     );
+    camera.position.set(0, 10, 25);
+
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     mountRef.current.appendChild(renderer.domElement);
 
-    // ---------- LYS ----------
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-    scene.add(hemi);
-    const dir = new THREE.DirectionalLight(0xffffff, 1.2);
-    dir.position.set(-10, 25, 15);
+    // --- LYS ---
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const dir = new THREE.DirectionalLight(0xffffff, 1);
+    dir.position.set(20, 40, 20);
     scene.add(dir);
 
-    // ---------- CANNON ----------
+    // --- CANNON ---
     const world = new CANNON.World();
     world.gravity.set(0, -9.82, 0);
-    world.broadphase = new CANNON.SAPBroadphase(world);
-    world.allowSleep = true;
 
-    const groundMat = new CANNON.Material("ground");
-    const playerMat = new CANNON.Material("player");
-    const contact = new CANNON.ContactMaterial(groundMat, playerMat, {
-      friction: 0.5,
-      restitution: 0.0,
-    });
-    world.addContactMaterial(contact);
+    // --- HØYDEFUNKSJON ---
+    const heightFn = (x, z) =>
+      Math.sin(x / 8) * Math.cos(z / 8) * 1.5 + 1.5;
 
-    // ---------- TERRAIN ----------
-    const heightFn = (x, z) => {
-      const nx = x / 20;
-      const nz = z / 20;
-      const base = Math.sin(nx) * Math.cos(nz) * 1.5;
-      const ripples = Math.sin(nx * 2.2 + nz * 1.7) * 0.3;
-      const bias = 1.2;
-      return base + ripples + bias;
-    };
-
-    // matrise for høyder
+    // --- MATRICE AV HØYDER ---
     const heights = [];
     for (let i = 0; i < GRID_RES; i++) {
       const row = [];
@@ -74,14 +54,17 @@ export default function Game() {
       heights.push(row);
     }
 
-    // Cannon heightfield
+    // --- HEIGHTFIELD SHAPE ---
     const hfShape = new CANNON.Heightfield(heights, { elementSize: ELEM });
-    const hfBody = new CANNON.Body({ mass: 0, material: groundMat });
+    const hfBody = new CANNON.Body({ mass: 0 });
     hfBody.addShape(hfShape);
-    hfBody.position.set(-TERRAIN_SIZE / 2, 0, -TERRAIN_SIZE / 2);
+
+    // 👇 Roter og plasser terrenget riktig
+    hfBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    hfBody.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
     world.addBody(hfBody);
 
-    // Three geometry
+    // --- THREE TERRAIN (visuell grønn) ---
     const geo = new THREE.PlaneGeometry(
       TERRAIN_SIZE,
       TERRAIN_SIZE,
@@ -92,95 +75,56 @@ export default function Game() {
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i);
-      const h = heightFn(x, y);
-      pos.setZ(i, h);
+      pos.setZ(i, heightFn(x, y));
     }
     pos.needsUpdate = true;
     geo.computeVertexNormals();
-
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x336633,
+      color: 0x339933,
       flatShading: true,
-      roughness: 1,
     });
     const terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.rotation.x = -Math.PI / 2;
     scene.add(terrainMesh);
 
-    // ---------- PLAYER ----------
-    const playerBody = new CANNON.Body({
-      mass: 1,
-      shape: new CANNON.Sphere(PLAYER_RADIUS),
-      material: playerMat,
-      position: new CANNON.Vec3(0, 10, 0),
-      linearDamping: 0.4,
-      angularDamping: 0.9,
+    // --- DEBUG VISUAL: RØD TRANSPARENT PLANE ---
+    const debugGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 1, 1);
+    const debugMat = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
     });
-    world.addBody(playerBody);
+    const debugMesh = new THREE.Mesh(debugGeo, debugMat);
+    debugMesh.rotation.x = -Math.PI / 2;
+    scene.add(debugMesh);
 
-    const playerMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32),
+    // --- BALL ---
+    const ballShape = new CANNON.Sphere(0.5);
+    const ballBody = new CANNON.Body({ mass: 1, shape: ballShape });
+    ballBody.position.set(0, 10, 0);
+    world.addBody(ballBody);
+    const ballMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 32, 32),
       new THREE.MeshStandardMaterial({ color: 0x3399ff })
     );
-    scene.add(playerMesh);
+    scene.add(ballMesh);
 
-    // ---------- INPUT ----------
-    const keys = { w: false, a: false, s: false, d: false };
-    window.addEventListener("keydown", (e) => {
-      const k = e.key.toLowerCase();
-      if (k in keys) keys[k] = true;
-    });
-    window.addEventListener("keyup", (e) => {
-      const k = e.key.toLowerCase();
-      if (k in keys) keys[k] = false;
-    });
-
-    // ---------- ANIMASJON ----------
-    const MOVE_SPEED = 6;
+    // --- LOOP ---
     const animate = () => {
       animId = requestAnimationFrame(animate);
       world.step(1 / 60);
 
-      // bevegelse
-      const input = new CANNON.Vec3(
-        (keys.d ? 1 : 0) - (keys.a ? 1 : 0),
-        0,
-        (keys.s ? 1 : 0) - (keys.w ? 1 : 0)
-      );
-      if (input.length() > 0) {
-        input.normalize();
-        input.scale(MOVE_SPEED, input);
-        playerBody.velocity.x = input.x;
-        playerBody.velocity.z = input.z;
-      }
+      ballMesh.position.copy(ballBody.position);
+      ballMesh.quaternion.copy(ballBody.quaternion);
 
-      // sync
-      playerMesh.position.copy(playerBody.position);
-      playerMesh.quaternion.copy(playerBody.quaternion);
-
-      // kamera følger
-      const p = playerBody.position;
-      camera.position.lerp(
-        new THREE.Vector3(p.x, p.y + 3, p.z + 6),
-        0.1
-      );
-      camera.lookAt(p.x, p.y + 1, p.z);
-
+      camera.lookAt(ballMesh.position);
       renderer.render(scene, camera);
     };
     animate();
 
-    // ---------- CLEANUP ----------
-    const onResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    };
-    window.addEventListener("resize", onResize);
-
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener("resize", onResize);
       mountRef.current.removeChild(renderer.domElement);
     };
   }, []);
