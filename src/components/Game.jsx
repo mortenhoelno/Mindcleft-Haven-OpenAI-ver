@@ -11,6 +11,7 @@ export default function Game() {
     let terrainMesh, hfBody;
     let playerBody, playerMesh;
     let animId;
+    let direction = 1;
 
     // ---------- PARAMETRE ----------
     const TERRAIN_SIZE = 100;
@@ -21,13 +22,13 @@ export default function Game() {
     // ---------- HØYDEFUNKSJON ----------
     const heightFn = (x, z) => {
       const r = Math.sqrt(x * x + z * z);
-      const h = Math.max(0, 8 - r * 0.15); // Fjell som reiser seg mot midten
+      const h = Math.max(0, 8 - r * 0.15); // Fjell i midten
       return h;
     };
 
     // ---------- INIT ----------
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x88aaff);
+    scene.background = new THREE.Color(0x88bbff); // blå himmel
 
     camera = new THREE.PerspectiveCamera(
       60,
@@ -49,9 +50,7 @@ export default function Game() {
     scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
     // ---------- FYSIKK ----------
-    world = new CANNON.World({
-      gravity: new CANNON.Vec3(0, -9.82, 0),
-    });
+    world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
     // ---------- TERRÆN ----------
     const heights = [];
@@ -82,15 +81,17 @@ export default function Game() {
     geo.computeVertexNormals();
 
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x338833,
+      color: 0x336633,
       wireframe: true,
     });
     terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.rotation.x = -Math.PI / 2;
     scene.add(terrainMesh);
 
-    // Rutenett
+    // Rutenett (helt flatt og i sync)
     const grid = new THREE.GridHelper(200, 40, 0xff4400, 0xaa0000);
+    grid.rotation.x = 0;
+    grid.position.y = 0.05;
     scene.add(grid);
 
     // Cannon heightfield
@@ -98,15 +99,12 @@ export default function Game() {
     hfBody = new CANNON.Body({ mass: 0 });
     hfBody.addShape(hfShape);
     hfBody.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
-
-    // 📐 Roter heightfield flatt (beregnet)
     hfBody.quaternion.setFromEuler(Math.PI / 2, 0, 0);
-
     world.addBody(hfBody);
 
     // ---------- BALL ----------
     const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
-    const sphereMat = new THREE.MeshStandardMaterial({ color: 0x4488ff });
+    const sphereMat = new THREE.MeshStandardMaterial({ color: 0x2266ff });
     playerMesh = new THREE.Mesh(sphereGeo, sphereMat);
     scene.add(playerMesh);
 
@@ -114,8 +112,8 @@ export default function Game() {
       mass: 5,
       shape: new CANNON.Sphere(PLAYER_RADIUS),
       position: new CANNON.Vec3(0, 20, 0),
-      linearDamping: 0.4,
-      angularDamping: 0.4,
+      linearDamping: 0.3,
+      angularDamping: 0.3,
     });
     world.addBody(playerBody);
 
@@ -125,6 +123,11 @@ export default function Game() {
       animId = requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
       world.step(1 / 60, dt, 3);
+
+      // Enkel rullebevegelse frem og tilbake
+      playerBody.velocity.x = direction * 3;
+      if (playerBody.position.x > 20) direction = -1;
+      if (playerBody.position.x < -20) direction = 1;
 
       // Sync mesh
       playerMesh.position.copy(playerBody.position);
