@@ -21,7 +21,7 @@ export default function Game() {
     const PLAYER_RADIUS = 1;
     const MOVE_FORCE = 40;
 
-    // ---------- INIT ----------
+    // ---------- SCENE ----------
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb); // himmelblå
 
@@ -31,25 +31,23 @@ export default function Game() {
       0.1,
       300
     );
-    camera.position.set(0, 20, 25);
+    camera.position.set(0, 30, 60);
     camera.lookAt(0, 0, 0);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
 
-    // LYS
+    // ---------- LYS ----------
     const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(20, 50, 10);
+    dirLight.position.set(50, 100, 50);
     scene.add(dirLight);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
     // ---------- FYSIKK ----------
-    world = new CANNON.World({
-      gravity: new CANNON.Vec3(0, -9.82, 0),
-    });
+    world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
-    // ---------- TERRAIN ----------
+    // ---------- HØYDEFELT ----------
     const heightFn = (x, z) => Math.sin(x / 15) * Math.cos(z / 15) * 2;
 
     const heights = [];
@@ -87,15 +85,15 @@ export default function Game() {
     terrainMesh.rotation.x = -Math.PI / 2;
     scene.add(terrainMesh);
 
-    // CANNON – heightfield
+    // Cannon heightfield
     const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
     terrainBody = new CANNON.Body({ mass: 0 });
     terrainBody.addShape(shape);
     terrainBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    terrainBody.position.set(-TERRAIN_SIZE / 2, -1, TERRAIN_SIZE / 2);
+    terrainBody.position.set(-TERRAIN_SIZE / 2, -2, TERRAIN_SIZE / 2);
     world.addBody(terrainBody);
 
-    // ---------- BALL / SPILLER ----------
+    // ---------- BALL ----------
     const ballGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
     const ballMat = new THREE.MeshStandardMaterial({ color: 0x0044ff });
     playerMesh = new THREE.Mesh(ballGeo, ballMat);
@@ -104,7 +102,7 @@ export default function Game() {
     playerBody = new CANNON.Body({
       mass: 1,
       shape: new CANNON.Sphere(PLAYER_RADIUS),
-      position: new CANNON.Vec3(0, 15, 0),
+      position: new CANNON.Vec3(0, 20, 0),
       linearDamping: 0.4,
       angularDamping: 0.4,
     });
@@ -124,12 +122,10 @@ export default function Game() {
 
     // ---------- LOOP ----------
     const clock = new THREE.Clock();
-
     const step = () => {
       animId = requestAnimationFrame(step);
       const dt = Math.min(clock.getDelta(), 0.05);
 
-      // Oppdater fysikk
       const force = new CANNON.Vec3(0, 0, 0);
       if (keys.w) force.z -= MOVE_FORCE;
       if (keys.s) force.z += MOVE_FORCE;
@@ -138,22 +134,18 @@ export default function Game() {
       playerBody.applyForce(force, playerBody.position);
 
       world.step(1 / 60, dt, 3);
-
-      // Sync
       playerMesh.position.copy(playerBody.position);
 
-      // Kamera følger
-      const targetCam = new THREE.Vector3(
+      const camTarget = new THREE.Vector3(
         playerBody.position.x,
-        playerBody.position.y + 10,
-        playerBody.position.z + 20
+        playerBody.position.y + 15,
+        playerBody.position.z + 25
       );
-      camera.position.lerp(targetCam, 0.08);
+      camera.position.lerp(camTarget, 0.05);
       camera.lookAt(playerBody.position);
 
       renderer.render(scene, camera);
     };
-
     step();
 
     // ---------- CLEANUP ----------
@@ -175,4 +167,3 @@ export default function Game() {
     />
   );
 }
-
