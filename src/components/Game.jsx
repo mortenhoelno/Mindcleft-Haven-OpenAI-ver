@@ -10,7 +10,7 @@ export default function Game() {
     let scene, camera, renderer;
     let world;
     let terrainMesh, terrainBody;
-    let playerBody;
+    let playerMesh, playerBody;
     let keys = { w: false, a: false, s: false, d: false };
     let animId;
 
@@ -20,186 +20,147 @@ export default function Game() {
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
     const PLAYER_RADIUS = 0.5;
     const MOVE_FORCE = 25;
-    const LIN_DAMP = 0.95;
-    const ANG_DAMP = 0.9;
 
-    // Enkel terrengfunksjon
+    // ---------- INIT ----------
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x88bbff);
+
+    camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      300
+    );
+    camera.position.set(0, 15, 25);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Lys
+    const light = new THREE.DirectionalLight(0xffffff, 1.2);
+    light.position.set(20, 50, 10);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    // ---------- FYSIKK ----------
+    world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+
+    // ---------- TERRAIN ----------
     const heightFn = (x, z) => {
       const nx = x / 35, nz = z / 35;
-      const base = Math.sin(nx) * Math.cos(nz) * 2.0;
-      const ripples = Math.sin(nx * 2.7 + nz * 1.9) * 0.6;
-      const bias = 0.8;
-      return base + ripples + bias;
+      return Math.sin(nx) * Math.cos(nz) * 2.5 + 1.0;
     };
 
-    const buildTerrain = () => {
-      const heights = [];
-      for (let i = 0; i < GRID_RES; i++) {
-        const row = [];
-        for (let j = 0; j < GRID_RES; j++) {
-          const x = -TERRAIN_SIZE / 2 + j * ELEM;
-          const z = -TERRAIN_SIZE / 2 + i * ELEM;
-          row.push(heightFn(x, z));
-        }
-        heights.push(row);
+    const heights = [];
+    for (let i = 0; i < GRID_RES; i++) {
+      const row = [];
+      for (let j = 0; j < GRID_RES; j++) {
+        const x = -TERRAIN_SIZE / 2 + j * ELEM;
+        const z = -TERRAIN_SIZE / 2 + i * ELEM;
+        row.push(heightFn(x, z));
       }
+      heights.push(row);
+    }
 
-      // THREE MESH
-      const geo = new THREE.PlaneGeometry(
-        TERRAIN_SIZE,
-        TERRAIN_SIZE,
-        GRID_RES - 1,
-        GRID_RES - 1
-      );
-      const pos = geo.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const vx = pos.getX(i);
-        const vz = pos.getY(i);
-        const h = heightFn(vx, vz);
-        pos.setZ(i, h);
-      }
-      pos.needsUpdate = true;
-      geo.computeVertexNormals();
+    // THREE
+    const geo = new THREE.PlaneGeometry(
+      TERRAIN_SIZE,
+      TERRAIN_SIZE,
+      GRID_RES - 1,
+      GRID_RES - 1
+    );
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i);
+      const vz = pos.getY(i);
+      const h = heightFn(vx, vz);
+      pos.setZ(i, h);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
 
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0x336633,
-        flatShading: true,
-        roughness: 1,
-        metalness: 0,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.rotation.x = -Math.PI / 2;
-      scene.add(mesh);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x227722,
+      flatShading: true,
+    });
+    terrainMesh = new THREE.Mesh(geo, mat);
+    terrainMesh.rotation.x = -Math.PI / 2;
+    scene.add(terrainMesh);
 
-      // CANNON HEIGHTFIELD
-      const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
-      const body = new CANNON.Body({ mass: 0 });
-      body.addShape(shape);
-      body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-      // Flytt og løft litt slik at det matcher Three
-      body.position.set(-TERRAIN_SIZE / 2, -0.8, TERRAIN_SIZE / 2);
-      world.addBody(body);
+    // Cannon
+    const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
+    terrainBody = new CANNON.Body({ mass: 0 });
+    terrainBody.addShape(shape);
+    terrainBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    terrainBody.position.set(-TERRAIN_SIZE / 2, -1, TERRAIN_SIZE / 2);
+    world.addBody(terrainBody);
 
-      return { mesh, body };
+    // ---------- SPILLER ----------
+    const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
+    const sphereMat = new THREE.MeshStandardMaterial({ color: 0x4488ff });
+    playerMesh = new THREE.Mesh(sphereGeo, sphereMat);
+    scene.add(playerMesh);
+
+    playerBody = new CANNON.Body({
+      mass: 1,
+      shape: new CANNON.Sphere(PLAYER_RADIUS),
+      position: new CANNON.Vec3(0, 15, 0),
+      linearDamping: 0.4,
+      angularDamping: 0.4,
+    });
+    world.addBody(playerBody);
+
+    // ---------- INPUT ----------
+    const onKey = (e, down) => {
+      const k = e.key.toLowerCase();
+      if (k in keys) keys[k] = down;
     };
+    window.addEventListener("keydown", (e) => onKey(e, true));
+    window.addEventListener("keyup", (e) => onKey(e, false));
 
-    const init = () => {
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x20242e);
-      scene.fog = new THREE.Fog(0x20242e, 30, 90);
+    // ---------- ANIM LOOP ----------
+    const clock = new THREE.Clock();
+    const step = () => {
+      animId = requestAnimationFrame(step);
+      const dt = Math.min(clock.getDelta(), 0.05);
 
-      camera = new THREE.PerspectiveCamera(
-        70,
-        window.innerWidth / window.innerHeight,
-        0.05,
-        300
-      );
-      camera.position.set(0, 8, 20); // Start over bakken
+      // Bevegelse
+      const force = new CANNON.Vec3(0, 0, 0);
+      if (keys.w) force.z -= MOVE_FORCE;
+      if (keys.s) force.z += MOVE_FORCE;
+      if (keys.a) force.x -= MOVE_FORCE;
+      if (keys.d) force.x += MOVE_FORCE;
+      playerBody.applyForce(force, playerBody.position);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      mountRef.current.appendChild(renderer.domElement);
+      world.step(1 / 60, dt, 3);
 
-      // Lys
-      const dir = new THREE.DirectionalLight(0xffffff, 1.1);
-      dir.position.set(20, 30, 10);
-      scene.add(dir);
-      scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+      // Sync
+      playerMesh.position.copy(playerBody.position);
 
-      // Fysikk
-      world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-      world.broadphase = new CANNON.SAPBroadphase(world);
-      world.allowSleep = true;
-
-      const groundMat = new CANNON.Material("ground");
-      const playerMat = new CANNON.Material("player");
-      const contact = new CANNON.ContactMaterial(groundMat, playerMat, {
-        friction: 0.4,
-        restitution: 0.15,
-      });
-      world.addContactMaterial(contact);
-
-      const t = buildTerrain();
-      terrainMesh = t.mesh;
-      terrainBody = t.body;
-      terrainBody.material = groundMat;
-
-      // Spiller
-      const sphereGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
-      const sphereMat = new THREE.MeshStandardMaterial({ color: 0x4488ff });
-      const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
-      scene.add(sphereMesh);
-
-      playerBody = new CANNON.Body({
-        mass: 1,
-        shape: new CANNON.Sphere(PLAYER_RADIUS),
-        linearDamping: 1 - LIN_DAMP,
-        angularDamping: 1 - ANG_DAMP,
-        position: new CANNON.Vec3(0, 10, 0),
-      });
-      playerBody.material = playerMat;
-      world.addBody(playerBody);
-
-      // Input
-      const onKey = (e, down) => {
-        const k = e.key.toLowerCase();
-        if (k in keys) keys[k] = down;
-      };
-      window.addEventListener("keydown", (e) => onKey(e, true));
-      window.addEventListener("keyup", (e) => onKey(e, false));
-
-      // --- ANIMASJON ---
-      const clock = new THREE.Clock();
-      const step = () => {
-        animId = requestAnimationFrame(step);
-        const dt = Math.min(clock.getDelta(), 0.05);
-
-        const force = new CANNON.Vec3(0, 0, 0);
-        if (keys.w) force.z -= MOVE_FORCE;
-        if (keys.s) force.z += MOVE_FORCE;
-        if (keys.a) force.x -= MOVE_FORCE;
-        if (keys.d) force.x += MOVE_FORCE;
-        playerBody.applyForce(force, playerBody.position);
-
-        world.step(1 / 60, dt, 3);
-
-        // Sync mesh med fysikk
-        sphereMesh.position.copy(playerBody.position);
-        sphereMesh.quaternion.copy(playerBody.quaternion);
-
-        // Kamera følger
-        const camTarget = new THREE.Vector3(
+      // Kamera
+      camera.position.lerp(
+        new THREE.Vector3(
           playerBody.position.x,
-          playerBody.position.y + 2,
-          playerBody.position.z + 6
-        );
-        camera.position.lerp(camTarget, 0.05);
-        camera.lookAt(playerBody.position);
+          playerBody.position.y + 8,
+          playerBody.position.z + 15
+        ),
+        0.05
+      );
+      camera.lookAt(playerBody.position);
 
-        renderer.render(scene, camera);
-      };
-      step();
-
-      // Resize
-      const onResize = () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      };
-      window.addEventListener("resize", onResize);
-
-      return () => {
-        cancelAnimationFrame(animId);
-        window.removeEventListener("resize", onResize);
-        if (renderer && mountRef.current) {
-          mountRef.current.removeChild(renderer.domElement);
-          renderer.dispose();
-        }
-      };
+      renderer.render(scene, camera);
     };
+    step();
 
-    const cleanup = init();
-    return cleanup;
+    // ---------- CLEANUP ----------
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
+      mountRef.current.removeChild(renderer.domElement);
+      renderer.dispose();
+    };
   }, []);
 
   return (
