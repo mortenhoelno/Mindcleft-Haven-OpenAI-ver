@@ -1,6 +1,6 @@
+// src/components/Game.jsx
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as CANNON from "cannon-es";
 
 export default function Game() {
@@ -8,176 +8,238 @@ export default function Game() {
 
   useEffect(() => {
     let scene, camera, renderer;
-    let world, playerBody, floorBody;
-    let playerGroup;
-    let animationId;
-    let controls;
+    let world;
+    let terrainMesh, terrainBody;
+    let playerBody, playerGroup;
+    let keys = { w: false, a: false, s: false, d: false };
+    let animId;
+
+    // ---------- PARAMETRE ----------
+    const TERRAIN_SIZE = 200;     // meter
+    const GRID_RES = 129;         // rutenett (må være n = segments+1)
+    const ELEM = TERRAIN_SIZE / (GRID_RES - 1); // elementSize i Cannon
+    const PLAYER_RADIUS = 0.5;
+    const MOVE_SPEED = 6;         // m/s mål-fart på bakken
+    const AIR_CONTROL = 0.2;      // mindre kontroll i lufta
+    const LIN_DAMP = 0.92;        // høy damping = stopper raskt
+    const ANG_DAMP = 0.98;
+
+    // Enkel “fjell”-funksjon (ingen ekstern noise)
+    const heightFn = (x, z) => {
+      // x,z i [-TERRAIN_SIZE/2, TERRAIN_SIZE/2]
+      const nx = x / 35, nz = z / 35;
+      const base = Math.sin(nx) * Math.cos(nz) * 2.0;
+      const ripples = Math.sin(nx * 2.7 + nz * 1.9) * 0.6;
+      const bias = 0.8; // løfter alt litt
+      return base + ripples + bias;
+    };
+
+    // Bygg 2D høyde-matrise for Cannon + tilhørende Three-geo
+    const buildTerrain = () => {
+      // 1) Høyder til Cannon (matrise [i][j])
+      const heights = [];
+      for (let i = 0; i < GRID_RES; i++) {
+        const row = [];
+        for (let j = 0; j < GRID_RES; j++) {
+          const x = -TERRAIN_SIZE / 2 + j * ELEM;
+          const z = -TERRAIN_SIZE / 2 + i * ELEM;
+          row.push(heightFn(x, z));
+        }
+        heights.push(row);
+      }
+
+      // 2) Three-geometry (Plane med (GRID_RES-1) segmenter)
+      const geo = new THREE.PlaneGeometry(
+        TERRAIN_SIZE,
+        TERRAIN_SIZE,
+        GRID_RES - 1,
+        GRID_RES - 1
+      );
+      // løft alle toppunkter etter heightFn
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vz = pos.getY(i); // NB: PlaneGeometry bruker (x, y) som “flate”. y blir senere Z i verden
+        const wx = vx; // world x
+        const wz = vz; // world z (før rotasjon)
+        const h = heightFn(wx, wz);
+        pos.setZ(i, h); // etter rotasjonen vil dette bli Y i verdensrommet
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x336633,
+        flatShading: true,
+        roughness: 1,
+        metalness: 0,
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2; // gjør plane liggende med Y som opp
+      mesh.receiveShadow = false;
+
+      // 3) Cannon Heightfield
+      const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
+      const body = new CANNON.Body({ mass: 0 });
+      body.addShape(shape);
+
+      // Viktig: Cannon’s Heightfield referanse er i (0,0) hjørnet.
+      // Flytt hele terrenget slik at Three og Cannon matcher 1:1.
+      body.position.set(-TERRAIN_SIZE / 2, 0, -TERRAIN_SIZE / 2);
+
+      return { mesh, body };
+    };
 
     const init = () => {
-      // --- SCENE ---
+      // ---------- THREE ----------
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x87ceeb);
+      scene.background = new THREE.Color(0x20242e);
+      scene.fog = new THREE.Fog(0x20242e, 30, 90);
 
       camera = new THREE.PerspectiveCamera(
-        75,
+        70,
         window.innerWidth / window.innerHeight,
-        0.1,
-        200
+        0.05,
+        300
       );
-      camera.position.set(0, 1.5, 5);
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      renderer.domElement.style.display = "block"; // unngå CSS-stretch (oval)
       mountRef.current.appendChild(renderer.domElement);
 
-      // --- LIGHT ---
-      const light = new THREE.DirectionalLight(0xffffff, 1.2);
-      light.position.set(5, 10, 7.5);
-      scene.add(light);
-      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+      // Lys
+      const dir = new THREE.DirectionalLight(0xffffff, 1.1);
+      dir.position.set(20, 30, 10);
+      dir.castShadow = false;
+      scene.add(dir);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
-      // --- CONTROLS ---
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.enablePan = false;
-      controls.enableZoom = true;
-
-      // --- PHYSICS (CANNON) ---
-      world = new CANNON.World();
-      world.gravity.set(0, -9.82, 0);
-
-      // Floor
-      const floorShape = new CANNON.Plane();
-      floorBody = new CANNON.Body({ mass: 0 });
-      floorBody.addShape(floorShape);
-      floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-      world.addBody(floorBody);
-
-      const floorGeo = new THREE.PlaneGeometry(200, 200);
-      const floorMat = new THREE.MeshStandardMaterial({
-        color: 0x777777,
-        side: THREE.DoubleSide,
+      // ---------- CANNON ----------
+      world = new CANNON.World({
+        gravity: new CANNON.Vec3(0, -9.81, 0),
       });
-      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-      floorMesh.rotation.x = -Math.PI / 2;
-      scene.add(floorMesh);
+      world.broadphase = new CANNON.SAPBroadphase(world);
+      world.allowSleep = true;
 
-      // Player
-      const playerShape = new CANNON.Sphere(0.5);
+      // Materialer og friksjon
+      const groundMat = new CANNON.Material("ground");
+      const playerMat = new CANNON.Material("player");
+      const contact = new CANNON.ContactMaterial(groundMat, playerMat, {
+        friction: 0.4,
+        restitution: 0.0,
+      });
+      world.addContactMaterial(contact);
+
+      // Terreng
+      const t = buildTerrain();
+      terrainMesh = t.mesh;
+      terrainBody = t.body;
+      scene.add(terrainMesh);
+      world.addBody(terrainBody);
+      terrainBody.material = groundMat;
+
+      // Spiller (kule)
       playerBody = new CANNON.Body({
         mass: 1,
-        position: new CANNON.Vec3(0, 5, 0),
-        shape: playerShape,
+        shape: new CANNON.Sphere(PLAYER_RADIUS),
+        linearDamping: 1 - LIN_DAMP,   // Cannon bruker (1 - dampingFactor)
+        angularDamping: 1 - ANG_DAMP,
+        position: new CANNON.Vec3(0, 8, 0),
       });
+      playerBody.material = playerMat;
       world.addBody(playerBody);
 
-      const playerMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.5, 32, 32),
-        new THREE.MeshStandardMaterial({ color: 0x0077ff })
-      );
-      scene.add(playerMesh);
-
+      // Player-group i Three (for kamera)
       playerGroup = new THREE.Group();
-      playerGroup.add(camera);
       scene.add(playerGroup);
+      camera.position.set(0, 1.4, 0);
+      playerGroup.add(camera);
 
-      // Movement
-      const keys = { w: false, a: false, s: false, d: false };
-      const speed = 5;
-      let pitch = 0;
-      let yaw = 0;
-
-      const onKeyDown = (e) => {
+      // Input
+      const onKey = (e, down) => {
         const k = e.key.toLowerCase();
-        if (k in keys) keys[k] = true;
+        if (k in keys) keys[k] = down;
       };
-      const onKeyUp = (e) => {
-        const k = e.key.toLowerCase();
-        if (k in keys) keys[k] = false;
-      };
+      window.addEventListener("keydown", (e) => onKey(e, true));
+      window.addEventListener("keyup", (e) => onKey(e, false));
 
-      document.addEventListener("keydown", onKeyDown);
-      document.addEventListener("keyup", onKeyUp);
-
-      const onMouseMove = (e) => {
-        if (document.pointerLockElement === renderer.domElement) {
-          yaw -= e.movementX * 0.002;
-          pitch -= e.movementY * 0.002;
-          pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-        }
-      };
-
+      // PointerLock er valgfritt (unngå feil i konsoll)
       renderer.domElement.addEventListener("click", () => {
-        renderer.domElement.requestPointerLock();
-      });
-      document.addEventListener("mousemove", onMouseMove);
-
-      // Animation
-      const animate = () => {
-        animationId = requestAnimationFrame(animate);
-        const moveDir = new THREE.Vector3();
-
-        if (keys.w) moveDir.z -= 1;
-        if (keys.s) moveDir.z += 1;
-        if (keys.a) moveDir.x -= 1;
-        if (keys.d) moveDir.x += 1;
-
-        moveDir.normalize();
-        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          yaw
-        );
-        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          yaw
-        );
-        const dir = new THREE.Vector3();
-        dir.addScaledVector(forward, moveDir.z);
-        dir.addScaledVector(right, moveDir.x);
-        dir.normalize();
-
-        if (moveDir.length() > 0) {
-          playerBody.velocity.x = dir.x * speed;
-          playerBody.velocity.z = dir.z * speed;
+        if (document.pointerLockElement !== renderer.domElement) {
+          renderer.domElement.requestPointerLock().catch(() => {});
         }
+      });
 
-        world.step(1 / 60);
+      // ---------- ANIMASJON ----------
+      let last = performance.now();
+      const step = () => {
+        animId = requestAnimationFrame(step);
+        const now = performance.now();
+        const dt = Math.min((now - last) / 1000, 1 / 30);
+        last = now;
 
-        playerMesh.position.copy(playerBody.position);
-        playerGroup.position.set(
-          playerBody.position.x,
-          playerBody.position.y + 1.5,
-          playerBody.position.z
-        );
+        // Ønsket fart (lokalt i spillers retning – for nå bruker vi verdens akser)
+        const desired = new CANNON.Vec3(0, 0, 0);
+        if (keys.w) desired.z -= 1;
+        if (keys.s) desired.z += 1;
+        if (keys.a) desired.x -= 1;
+        if (keys.d) desired.x += 1;
+        if (desired.length() > 0) desired.normalize();
 
-        playerGroup.rotation.y = yaw;
-        camera.rotation.x = pitch;
+        // Sjekk “på bakken” (veldig enkel – se Y-hastighet og høyde)
+        const onGround = Math.abs(playerBody.velocity.y) < 0.5;
 
-        controls.update();
+        // Mål-fart
+        const speed = onGround ? MOVE_SPEED : MOVE_SPEED * AIR_CONTROL;
+        desired.scale(speed, desired);
+
+        // Lerp mot ønsket XZ-hastighet
+        const vxz = new CANNON.Vec3(playerBody.velocity.x, 0, playerBody.velocity.z);
+        const blend = onGround ? 0.2 : 0.08; // hvor raskt vi “sikter”
+        vxz.scale(1 - blend, vxz);
+        desired.scale(blend, desired);
+        vxz.vadd(desired, vxz);
+
+        playerBody.velocity.x = vxz.x;
+        playerBody.velocity.z = vxz.z;
+
+        world.step(1 / 60, dt, 3);
+
+        // Sync kamera-gruppen til spiller
+        const p = playerBody.position;
+        playerGroup.position.set(p.x, p.y, p.z);
+
         renderer.render(scene, camera);
       };
+      step();
 
-      animate();
-
-      window.addEventListener("resize", () => {
+      // Resize
+      const onResize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
+        renderer.setSize(window.innerWidth, window.innerHeight, false);
+      };
+      window.addEventListener("resize", onResize);
 
+      // Cleanup
       return () => {
-        cancelAnimationFrame(animationId);
-        document.removeEventListener("keydown", onKeyDown);
-        document.removeEventListener("keyup", onKeyUp);
-        document.removeEventListener("mousemove", onMouseMove);
-        renderer.dispose();
-        mountRef.current.removeChild(renderer.domElement);
+        cancelAnimationFrame(animId);
+        window.removeEventListener("resize", onResize);
+        if (renderer && renderer.domElement && mountRef.current) {
+          mountRef.current.removeChild(renderer.domElement);
+          renderer.dispose();
+        }
+        world.bodies.forEach((b) => world.removeBody(b));
+        world = null;
       };
     };
 
-    init();
+    const cleanup = init();
+    return cleanup;
   }, []);
 
-  return <div ref={mountRef} style={{ width: "100vw", height: "100vh" }} />;
+  return <div ref={mountRef} style={{ width: "100vw", height: "100vh", overflow: "hidden" }} />;
 }
