@@ -26,7 +26,7 @@ export default function Game() {
       return h;
     };
 
-    // ---------- INIT ----------
+    // ---------- SCENE OG KAMERA ----------
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x88bbff); // blå himmel
 
@@ -51,6 +51,19 @@ export default function Game() {
 
     // ---------- FYSIKK ----------
     world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+    world.broadphase = new CANNON.SAPBroadphase(world);
+    world.allowSleep = false;
+
+    // Materialer
+    const groundMat = new CANNON.Material("ground");
+    const ballMat = new CANNON.Material("ball");
+
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(groundMat, ballMat, {
+        friction: 0.4,
+        restitution: 0.05,
+      })
+    );
 
     // ---------- TERRÆN ----------
     const heights = [];
@@ -88,7 +101,7 @@ export default function Game() {
     terrainMesh.rotation.x = -Math.PI / 2;
     scene.add(terrainMesh);
 
-    // Rutenett (helt flatt og i sync)
+    // Rutenett
     const grid = new THREE.GridHelper(200, 40, 0xff4400, 0xaa0000);
     grid.rotation.x = 0;
     grid.position.y = 0.05;
@@ -96,7 +109,7 @@ export default function Game() {
 
     // Cannon heightfield
     const hfShape = new CANNON.Heightfield(heights, { elementSize: ELEM });
-    hfBody = new CANNON.Body({ mass: 0 });
+    hfBody = new CANNON.Body({ mass: 0, material: groundMat });
     hfBody.addShape(hfShape);
     hfBody.position.set(-TERRAIN_SIZE / 2, 0, TERRAIN_SIZE / 2);
     hfBody.quaternion.setFromEuler(Math.PI / 2, 0, 0);
@@ -109,11 +122,12 @@ export default function Game() {
     scene.add(playerMesh);
 
     playerBody = new CANNON.Body({
-      mass: 5,
+      mass: 2,
       shape: new CANNON.Sphere(PLAYER_RADIUS),
-      position: new CANNON.Vec3(0, 20, 0),
-      linearDamping: 0.3,
-      angularDamping: 0.3,
+      material: ballMat,
+      linearDamping: 0.25,
+      angularDamping: 0.35,
+      position: new CANNON.Vec3(0, PLAYER_RADIUS + 0.2 + 10, 0),
     });
     world.addBody(playerBody);
 
@@ -122,14 +136,13 @@ export default function Game() {
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
-      world.step(1 / 60, dt, 3);
+      world.step(1 / 60, dt, 3); // 3 substeps
 
-      // Enkel rullebevegelse frem og tilbake
+      // Enkel rullebevegelse
       playerBody.velocity.x = direction * 3;
       if (playerBody.position.x > 20) direction = -1;
       if (playerBody.position.x < -20) direction = 1;
 
-      // Sync mesh
       playerMesh.position.copy(playerBody.position);
       playerMesh.quaternion.copy(playerBody.quaternion);
 
@@ -137,7 +150,7 @@ export default function Game() {
     };
     animate();
 
-    // ---------- RYDD OPP ----------
+    // ---------- CLEANUP ----------
     return () => {
       cancelAnimationFrame(animId);
       mountRef.current.removeChild(renderer.domElement);
