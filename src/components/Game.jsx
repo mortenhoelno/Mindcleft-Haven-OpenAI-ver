@@ -1,4 +1,3 @@
-// src/components/Game.jsx
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
@@ -29,7 +28,7 @@ export default function Game() {
       70,
       window.innerWidth / window.innerHeight,
       0.1,
-      300
+      500
     );
     camera.position.set(0, 30, 60);
     camera.lookAt(0, 0, 0);
@@ -43,6 +42,12 @@ export default function Game() {
     dirLight.position.set(50, 100, 50);
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    // ---------- GRID OG AKSER ----------
+    const grid = new THREE.GridHelper(200, 40);
+    scene.add(grid);
+    const cross = new THREE.AxesHelper(5);
+    scene.add(cross);
 
     // ---------- FYSIKK ----------
     world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
@@ -85,7 +90,6 @@ export default function Game() {
     terrainMesh.rotation.x = -Math.PI / 2;
     scene.add(terrainMesh);
 
-    // Cannon heightfield
     const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
     terrainBody = new CANNON.Body({ mass: 0 });
     terrainBody.addShape(shape);
@@ -107,10 +111,6 @@ export default function Game() {
       angularDamping: 0.4,
     });
     world.addBody(playerBody);
-
-    // ---------- AKSEHJELPER ----------
-    const cross = new THREE.AxesHelper(5);
-    scene.add(cross);
 
     // ---------- INPUT ----------
     const onKey = (e, down) => {
@@ -143,6 +143,14 @@ export default function Game() {
       );
       camera.position.lerp(camTarget, 0.05);
       camera.lookAt(playerBody.position);
+
+      // ---------- DEBUG OUTPUT ----------
+      if (Math.floor(performance.now() / 500) % 2 === 0) {
+        console.clear();
+        console.log("📍 Kamera:", camera.position);
+        console.log("⚽ Kule:", playerBody.position);
+        console.log("⛰️  Terreng:", terrainBody.position);
+      }
 
       renderer.render(scene, camera);
     };
