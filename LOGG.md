@@ -137,6 +137,27 @@ Etter dette går vi til:
 🧠 19. oktober 2025 – Node-versjon og Vite-feil løst
 ---------------------------------------------------
 
+🧩 Hvorfor filene ble endret fra .js til .jsx
+
+React-komponenter bruker JSX-syntaks, som lar oss skrive HTML-lignende kode direkte i JavaScript.
+Filendelsen .jsx forteller både Vite, React-pluginen og byggsystemet (esbuild) at filen inneholder JSX og må kompileres deretter.
+
+Tidligere lå filene med .js, og da prøvde Vite å tolke <div> og <Canvas> som vanlige JavaScript-tagger — noe som førte til feilen:
+
+“The JSX syntax extension is not currently enabled.”
+
+Ved å endre filendelsen til .jsx:
+
+får Vite automatisk riktig loader (jsx i stedet for js),
+
+React sin plugin gjenkjenner komponentene korrekt,
+
+og prosjektet følger moderne standard (React 19 + Vite 7) for fremtidig kompatibilitet.
+
+Kort sagt:
+➡️ .jsx forteller verktøyene at filen inneholder React-kode,
+➡️ .js brukes kun til vanlige logiske moduler uten JSX.
+
 🧠 Den standarden jeg kommer til å foreslå neste uke også:
 
 (og som du bør bruke nå)
