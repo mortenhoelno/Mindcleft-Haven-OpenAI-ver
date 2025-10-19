@@ -134,4 +134,24 @@ Etter dette går vi til:
 ---
 
 ## 🧾 Sist oppdatert
+🧠 19. oktober 2025 – Node-versjon og Vite-feil løst
+---------------------------------------------------
+Problem:
+Vite krevde Node v20.19+ eller v22.12+, men Codespaces lå låst på Node v16.20.2.
+
+Tidligere forsøk:
+- Installering av Node 22 via `sudo n 22` virket lokalt, men Codespaces brukte fortsatt NVM som overstyrte path.
+- Symbolske lenker via `ln -sf` hadde ingen effekt fordi NVM gjenopprettet /usr/bin/node ved hvert terminalstart.
+
+Endelig løsning:
+1. Bruk `nvm install 22` for å laste ned og aktivere riktig versjon.
+2. Aktiver med `nvm use 22`.
+3. Sjekk versjon med `node -v` → v22.20.0.
+4. Gjør endringen permanent: `nvm alias default 22`.
+
+Resultat:
+✔️ Vite kjører som forventet med `npm run dev`.
+✔️ Miljø klart til videre bygging og Supabase-integrasjon.
+
+
 **19. oktober 2025** – av systembygger (ChatGPT GPT-5) og Morten Hoel  
