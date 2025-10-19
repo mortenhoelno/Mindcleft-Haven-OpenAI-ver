@@ -1,12 +1,15 @@
 // src/components/Game.jsx
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
+import * as CANNON from "cannon-es";
 
 export default function Game() {
   const mountRef = useRef(null);
 
   useEffect(() => {
-    // === SCENE, CAMERA, RENDERER ===
+    let animId = null;
+
+    // --- SCENE & CAMERA ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x222233);
 
@@ -16,46 +19,67 @@ export default function Game() {
       0.1,
       1000
     );
-    camera.position.set(0, 5, 10);
+    camera.position.set(0, 5, 15);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
 
-    // === LYS ===
+    // --- LYS ---
     const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-    hemi.position.set(0, 200, 0);
     scene.add(hemi);
-    const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+    const dir = new THREE.DirectionalLight(0xffffff, 1);
     dir.position.set(-10, 20, 10);
     scene.add(dir);
 
-    // === GRØNN BAKKE ===
-    const groundGeo = new THREE.PlaneGeometry(50, 50);
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x228822,
-    });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
+    // --- CANNON VERDEN ---
+    const world = new CANNON.World();
+    world.gravity.set(0, -9.82, 0);
 
-    // === BLÅ KULE ===
+    // --- BAKKE ---
+    const groundMat = new CANNON.Material();
+    const groundBody = new CANNON.Body({
+      mass: 0,
+      material: groundMat,
+      shape: new CANNON.Plane(),
+    });
+    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    world.addBody(groundBody);
+
+    const groundGeo = new THREE.PlaneGeometry(50, 50);
+    const groundMesh = new THREE.Mesh(
+      groundGeo,
+      new THREE.MeshStandardMaterial({ color: 0x228822 })
+    );
+    groundMesh.rotation.x = -Math.PI / 2;
+    scene.add(groundMesh);
+
+    // --- BALL ---
+    const ballShape = new CANNON.Sphere(1);
+    const ballBody = new CANNON.Body({ mass: 1, shape: ballShape });
+    ballBody.position.set(0, 10, 0);
+    world.addBody(ballBody);
+
     const ballGeo = new THREE.SphereGeometry(1, 32, 32);
     const ballMat = new THREE.MeshStandardMaterial({ color: 0x3399ff });
-    const ball = new THREE.Mesh(ballGeo, ballMat);
-    ball.position.set(0, 1, 0);
-    scene.add(ball);
+    const ballMesh = new THREE.Mesh(ballGeo, ballMat);
+    scene.add(ballMesh);
 
-    // === ANIMASJON ===
-    let animId = null;
+    // --- LOOP ---
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      ball.rotation.y += 0.01;
+      world.step(1 / 60);
+
+      // sync posisjon
+      ballMesh.position.copy(ballBody.position);
+      ballMesh.quaternion.copy(ballBody.quaternion);
+
+      camera.lookAt(ballMesh.position);
       renderer.render(scene, camera);
     };
     animate();
 
-    // === RESIZE ===
+    // --- CLEANUP ---
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
