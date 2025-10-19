@@ -14,7 +14,10 @@ export default function Game() {
 
     const init = async () => {
       try {
-        const RAPIER = (await import("@dimforge/rapier3d-compat")).default;
+        const RAPIER = (await import(
+  /* @vite-ignore */ "/node_modules/@dimforge/rapier3d-compat/rapier.js"
+)).default;
+
         await RAPIER.init();
         console.log("✅ Rapier initialized successfully");
 
