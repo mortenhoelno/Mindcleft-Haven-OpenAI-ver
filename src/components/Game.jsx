@@ -12,28 +12,28 @@ export default function Game() {
     let terrainMesh, terrainBody;
     let playerMesh, playerBody;
     let animId;
+    const keys = { w: false, a: false, s: false, d: false };
 
     // ---------- PARAMETRE ----------
-    const TERRAIN_SIZE = 100;
-    const GRID_RES = 64;
+    const TERRAIN_SIZE = 120;
+    const GRID_RES = 65;
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1);
-    const PLAYER_RADIUS = 0.8;
+    const PLAYER_RADIUS = 1;
+    const MOVE_FORCE = 40;
 
     // ---------- INIT ----------
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb); // himmelblå
 
-    // KAMERA – se ned mot sentrum
     camera = new THREE.PerspectiveCamera(
       70,
       window.innerWidth / window.innerHeight,
       0.1,
       300
     );
-    camera.position.set(0, 40, 40);
+    camera.position.set(0, 20, 25);
     camera.lookAt(0, 0, 0);
 
-    // RENDERER
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     mountRef.current.appendChild(renderer.domElement);
@@ -45,7 +45,9 @@ export default function Game() {
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
     // ---------- FYSIKK ----------
-    world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+    world = new CANNON.World({
+      gravity: new CANNON.Vec3(0, -9.82, 0),
+    });
 
     // ---------- TERRAIN ----------
     const heightFn = (x, z) => Math.sin(x / 15) * Math.cos(z / 15) * 2;
@@ -61,7 +63,6 @@ export default function Game() {
       heights.push(row);
     }
 
-    // THREE MESH
     const geo = new THREE.PlaneGeometry(
       TERRAIN_SIZE,
       TERRAIN_SIZE,
@@ -84,36 +85,86 @@ export default function Game() {
     });
     terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.rotation.x = -Math.PI / 2;
-    terrainMesh.position.y = 0;
     scene.add(terrainMesh);
 
-    // HJELPESYMBOL – et rødt kryss på sentrum
+    // CANNON – heightfield
+    const shape = new CANNON.Heightfield(heights, { elementSize: ELEM });
+    terrainBody = new CANNON.Body({ mass: 0 });
+    terrainBody.addShape(shape);
+    terrainBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    terrainBody.position.set(-TERRAIN_SIZE / 2, -1, TERRAIN_SIZE / 2);
+    world.addBody(terrainBody);
+
+    // ---------- BALL / SPILLER ----------
+    const ballGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
+    const ballMat = new THREE.MeshStandardMaterial({ color: 0x0044ff });
+    playerMesh = new THREE.Mesh(ballGeo, ballMat);
+    scene.add(playerMesh);
+
+    playerBody = new CANNON.Body({
+      mass: 1,
+      shape: new CANNON.Sphere(PLAYER_RADIUS),
+      position: new CANNON.Vec3(0, 15, 0),
+      linearDamping: 0.4,
+      angularDamping: 0.4,
+    });
+    world.addBody(playerBody);
+
+    // ---------- AKSEHJELPER ----------
     const cross = new THREE.AxesHelper(5);
     scene.add(cross);
 
-    // ---------- BALL ----------
-    const ballGeo = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
-    const ballMat = new THREE.MeshStandardMaterial({ color: 0x0000ff });
-    playerMesh = new THREE.Mesh(ballGeo, ballMat);
-    playerMesh.position.set(0, 10, 0);
-    scene.add(playerMesh);
+    // ---------- INPUT ----------
+    const onKey = (e, down) => {
+      const k = e.key.toLowerCase();
+      if (k in keys) keys[k] = down;
+    };
+    window.addEventListener("keydown", (e) => onKey(e, true));
+    window.addEventListener("keyup", (e) => onKey(e, false));
 
     // ---------- LOOP ----------
     const clock = new THREE.Clock();
+
     const step = () => {
       animId = requestAnimationFrame(step);
-      const dt = clock.getDelta();
+      const dt = Math.min(clock.getDelta(), 0.05);
 
-      playerMesh.rotation.y += dt * 0.5;
+      // Oppdater fysikk
+      const force = new CANNON.Vec3(0, 0, 0);
+      if (keys.w) force.z -= MOVE_FORCE;
+      if (keys.s) force.z += MOVE_FORCE;
+      if (keys.a) force.x -= MOVE_FORCE;
+      if (keys.d) force.x += MOVE_FORCE;
+      playerBody.applyForce(force, playerBody.position);
+
+      world.step(1 / 60, dt, 3);
+
+      // Sync
+      playerMesh.position.copy(playerBody.position);
+
+      // Kamera følger
+      const targetCam = new THREE.Vector3(
+        playerBody.position.x,
+        playerBody.position.y + 10,
+        playerBody.position.z + 20
+      );
+      camera.position.lerp(targetCam, 0.08);
+      camera.lookAt(playerBody.position);
+
       renderer.render(scene, camera);
     };
+
     step();
 
     // ---------- CLEANUP ----------
     return () => {
       cancelAnimationFrame(animId);
-      mountRef.current.removeChild(renderer.domElement);
-      renderer.dispose();
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
+      if (renderer && mountRef.current) {
+        mountRef.current.removeChild(renderer.domElement);
+        renderer.dispose();
+      }
     };
   }, []);
 
@@ -124,3 +175,4 @@ export default function Game() {
     />
   );
 }
+
