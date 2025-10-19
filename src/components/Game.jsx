@@ -15,26 +15,26 @@ export default function Game() {
     let animId;
 
     // ---------- PARAMETRE ----------
-    const TERRAIN_SIZE = 200;     // meter
-    const GRID_RES = 129;         // rutenett (må være n = segments+1)
+    const TERRAIN_SIZE = 200; // meter
+    const GRID_RES = 129; // rutenett (må være n = segments+1)
     const ELEM = TERRAIN_SIZE / (GRID_RES - 1); // elementSize i Cannon
     const PLAYER_RADIUS = 0.5;
-    const MOVE_SPEED = 6;         // m/s mål-fart på bakken
-    const AIR_CONTROL = 0.2;      // mindre kontroll i lufta
-    const LIN_DAMP = 0.92;        // høy damping = stopper raskt
+    const MOVE_SPEED = 6; // m/s mål-fart på bakken
+    const AIR_CONTROL = 0.2; // mindre kontroll i lufta
+    const LIN_DAMP = 0.92; // høy damping = stopper raskt
     const ANG_DAMP = 0.98;
 
     // Enkel “fjell”-funksjon (ingen ekstern noise)
     const heightFn = (x, z) => {
-      // x,z i [-TERRAIN_SIZE/2, TERRAIN_SIZE/2]
-      const nx = x / 35, nz = z / 35;
+      const nx = x / 35,
+        nz = z / 35;
       const base = Math.sin(nx) * Math.cos(nz) * 2.0;
       const ripples = Math.sin(nx * 2.7 + nz * 1.9) * 0.6;
-      const bias = 0.8; // løfter alt litt
+      const bias = 0.8;
       return base + ripples + bias;
     };
 
-    // Bygg 2D høyde-matrise for Cannon + tilhørende Three-geo
+    // ---------- BYGG TERRENG ----------
     const buildTerrain = () => {
       // 1) Høyder til Cannon (matrise [i][j])
       const heights = [];
@@ -48,22 +48,19 @@ export default function Game() {
         heights.push(row);
       }
 
-      // 2) Three-geometry (Plane med (GRID_RES-1) segmenter)
+      // 2) Three-geometry
       const geo = new THREE.PlaneGeometry(
         TERRAIN_SIZE,
         TERRAIN_SIZE,
         GRID_RES - 1,
         GRID_RES - 1
       );
-      // løft alle toppunkter etter heightFn
       const pos = geo.attributes.position;
       for (let i = 0; i < pos.count; i++) {
         const vx = pos.getX(i);
-        const vz = pos.getY(i); // NB: PlaneGeometry bruker (x, y) som “flate”. y blir senere Z i verden
-        const wx = vx; // world x
-        const wz = vz; // world z (før rotasjon)
-        const h = heightFn(wx, wz);
-        pos.setZ(i, h); // etter rotasjonen vil dette bli Y i verdensrommet
+        const vz = pos.getY(i);
+        const h = heightFn(vx, vz);
+        pos.setZ(i, h);
       }
       pos.needsUpdate = true;
       geo.computeVertexNormals();
@@ -76,7 +73,7 @@ export default function Game() {
       });
 
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.rotation.x = -Math.PI / 2; // gjør plane liggende med Y som opp
+      mesh.rotation.x = -Math.PI / 2;
       mesh.receiveShadow = false;
 
       // 3) Cannon Heightfield
@@ -84,9 +81,19 @@ export default function Game() {
       const body = new CANNON.Body({ mass: 0 });
       body.addShape(shape);
 
-      // Viktig: Cannon’s Heightfield referanse er i (0,0) hjørnet.
-      // Flytt hele terrenget slik at Three og Cannon matcher 1:1.
-      body.position.set(-TERRAIN_SIZE / 2, 0, -TERRAIN_SIZE / 2);
+      // 🔧 Roter og juster høyde slik at Three og Cannon matcher
+      body.quaternion.setFromEuler(-Math.PI / 2, 0, 0, "XYZ");
+
+      // Beregn snitthøyde for å plassere terrenget korrekt
+      let avgHeight = 0;
+      for (let i = 0; i < GRID_RES; i++) {
+        for (let j = 0; j < GRID_RES; j++) {
+          avgHeight += heights[i][j];
+        }
+      }
+      avgHeight /= GRID_RES * GRID_RES;
+
+      body.position.set(-TERRAIN_SIZE / 2, -avgHeight, -TERRAIN_SIZE / 2);
 
       return { mesh, body };
     };
@@ -107,7 +114,7 @@ export default function Game() {
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.setSize(window.innerWidth, window.innerHeight, false);
-      renderer.domElement.style.display = "block"; // unngå CSS-stretch (oval)
+      renderer.domElement.style.display = "block";
       mountRef.current.appendChild(renderer.domElement);
 
       // Lys
@@ -124,7 +131,7 @@ export default function Game() {
       world.broadphase = new CANNON.SAPBroadphase(world);
       world.allowSleep = true;
 
-      // Materialer og friksjon
+      // Materialer
       const groundMat = new CANNON.Material("ground");
       const playerMat = new CANNON.Material("player");
       const contact = new CANNON.ContactMaterial(groundMat, playerMat, {
@@ -137,17 +144,17 @@ export default function Game() {
       const t = buildTerrain();
       terrainMesh = t.mesh;
       terrainBody = t.body;
+      terrainBody.material = groundMat;
       scene.add(terrainMesh);
       world.addBody(terrainBody);
-      terrainBody.material = groundMat;
 
       // Spiller (kule)
       playerBody = new CANNON.Body({
         mass: 1,
         shape: new CANNON.Sphere(PLAYER_RADIUS),
-        linearDamping: 1 - LIN_DAMP,   // Cannon bruker (1 - dampingFactor)
+        linearDamping: 1 - LIN_DAMP,
         angularDamping: 1 - ANG_DAMP,
-        position: new CANNON.Vec3(0, 8, 0),
+        position: new CANNON.Vec3(0, 20, 0), // høyere startposisjon
       });
       playerBody.material = playerMat;
       world.addBody(playerBody);
@@ -166,7 +173,6 @@ export default function Game() {
       window.addEventListener("keydown", (e) => onKey(e, true));
       window.addEventListener("keyup", (e) => onKey(e, false));
 
-      // PointerLock er valgfritt (unngå feil i konsoll)
       renderer.domElement.addEventListener("click", () => {
         if (document.pointerLockElement !== renderer.domElement) {
           renderer.domElement.requestPointerLock().catch(() => {});
@@ -181,7 +187,7 @@ export default function Game() {
         const dt = Math.min((now - last) / 1000, 1 / 30);
         last = now;
 
-        // Ønsket fart (lokalt i spillers retning – for nå bruker vi verdens akser)
+        // Ønsket fart
         const desired = new CANNON.Vec3(0, 0, 0);
         if (keys.w) desired.z -= 1;
         if (keys.s) desired.z += 1;
@@ -189,16 +195,15 @@ export default function Game() {
         if (keys.d) desired.x += 1;
         if (desired.length() > 0) desired.normalize();
 
-        // Sjekk “på bakken” (veldig enkel – se Y-hastighet og høyde)
+        // Enkel “på bakken”-sjekk
         const onGround = Math.abs(playerBody.velocity.y) < 0.5;
 
-        // Mål-fart
         const speed = onGround ? MOVE_SPEED : MOVE_SPEED * AIR_CONTROL;
         desired.scale(speed, desired);
 
-        // Lerp mot ønsket XZ-hastighet
+        // Lerp mot ønsket fart
         const vxz = new CANNON.Vec3(playerBody.velocity.x, 0, playerBody.velocity.z);
-        const blend = onGround ? 0.2 : 0.08; // hvor raskt vi “sikter”
+        const blend = onGround ? 0.2 : 0.08;
         vxz.scale(1 - blend, vxz);
         desired.scale(blend, desired);
         vxz.vadd(desired, vxz);
@@ -208,7 +213,6 @@ export default function Game() {
 
         world.step(1 / 60, dt, 3);
 
-        // Sync kamera-gruppen til spiller
         const p = playerBody.position;
         playerGroup.position.set(p.x, p.y, p.z);
 
@@ -216,7 +220,6 @@ export default function Game() {
       };
       step();
 
-      // Resize
       const onResize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -241,5 +244,10 @@ export default function Game() {
     return cleanup;
   }, []);
 
-  return <div ref={mountRef} style={{ width: "100vw", height: "100vh", overflow: "hidden" }} />;
+  return (
+    <div
+      ref={mountRef}
+      style={{ width: "100vw", height: "100vh", overflow: "hidden" }}
+    />
+  );
 }
