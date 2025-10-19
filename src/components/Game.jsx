@@ -14,20 +14,13 @@ export default function Game() {
 
     const init = async () => {
       try {
-        // --- Dynamisk import som fungerer både lokalt og i Vercel ---
-        const RAPIER = (
-          await import(
-            /* @vite-ignore */ new URL(
-              "../node_modules/@dimforge/rapier3d-compat/rapier.js",
-              import.meta.url
-            ).href
-          )
-        ).default;
-
+        // --- Dynamisk import av Rapier (fungerer nå både lokalt og på Vercel) ---
+        const RAPIER = await import("@dimforge/rapier3d-compat");
         await RAPIER.init();
         console.log("✅ Rapier initialized successfully");
 
         // --- THREE SETUP ---
+
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
 
