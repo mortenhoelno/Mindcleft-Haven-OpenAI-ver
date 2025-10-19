@@ -3,6 +3,77 @@
 Denne guiden oppsummerer hvordan prosjektet bygges, oppdateres og vedlikeholdes — både teknisk og praktisk.
 Den kombinerer tidligere erfaringer, feilløsninger og nye beslutninger for å sikre stabilitet, hastighet og forutsigbarhet i videre utvikling.
 
+🌍 MindCleft Haven – Prosjektbeskrivelse og teknisk visjon
+
+MindCleft Haven er et forsknings- og utviklingsprosjekt som kombinerer psykologi, nevrobiologi og interaktiv teknologi.
+Målet er å bygge en virtuell verden der mennesker kan utforske mentale prosesser, emosjonell regulering og læring gjennom interaktiv opplevelse, bevegelse og sanseopplevelse.
+Prosjektet er i første omgang et eksperimentelt 3D-konsept bygget i React, Vite, Three.js og Cannon-ES, designet for å kjøre i nettleseren og kunne utvides til VR, AI og sanntidsinteraksjon.
+
+🎯 Mål og retning
+
+Skape en trygg, levende simulert verden som illustrerer menneskets indre prosesser (tanker, følelser, instinkter) på en visuell og kroppslig måte.
+
+Kombinere realistisk fysikk (Cannon-ES) med lettvektet webgrafikk (Three.js) for å gjøre det teknisk tilgjengelig på vanlige enheter.
+
+Gradvis bygge opp et rammeverk der AI-dialog, minnesystemer og læringsmekanismer kan integreres med scenen.
+
+Fokusere på stabilitet, forståelig kode og iterativ utvikling – heller få ting som fungerer godt, enn mange som fungerer halvveis.
+
+🧩 Kjerneteknologi
+Komponent	Brukes til	Status
+React 19	UI og komponentstruktur	✅ Stabil
+Vite 7+	Build- og dev-server	✅ Stabil
+Three.js	3D-grafikk og kamera	✅ Aktiv
+Cannon-ES	Fysikkmotor (JS-basert, ikke WASM)	✅ Stabil og deploybar
+Vercel	Hosting og CI/CD	✅ Automatisk bygg og deploy
+Supabase (planlagt)	Databaselagring og brukerdata	🔜 Neste fase
+AI-integrasjon (GPT)	Dialogsystem og refleksjonslogikk	🔜 Planlagt integrasjon
+🧠 Filosofi for utvikling
+
+Iterativ læring: Alt skal bygges, testes og forstås før neste steg tas.
+
+Kunnskap først, kode deretter: Vi implementerer bare det vi forstår.
+
+Realistisk fysikk og enkel formidling: Vi prioriterer opplevelse og forståelse fremfor kompleks grafikk.
+
+Systemisk enkelhet: Duplisering foretrekkes over abstraksjon for å bevare lesbarhet.
+
+Samarbeid mellom menneske og AI:
+AI brukes som teknisk assistent, strukturell rådgiver og problemløser –
+ikke som kreativ erstatter, men som forsterker for klarhet, retning og fart.
+
+🧭 Nåværende fase
+
+Vi har nå fullført:
+
+✅ Stabil fysikkmotor og scene (Cannon-ES + Three.js)
+
+✅ Bevegelse og kamera med muskontroll
+
+✅ Suksessfull Vercel deploy uten WASM-feil
+
+✅ Grunnleggende GitHub/Vite pipeline ferdigstilt
+
+Neste steg:
+
+Bygge terreng og kollisjon slik at brukeren kan gå på ujevne flater.
+
+Utvide med enkle interaktive objekter (f.eks. sphere pick-up, triggers).
+
+Gradvis bygge ut et emosjonelt/mentalt “miljøsystem” for bruk i pedagogisk og terapeutisk simulering.
+
+🧱 Arbeidsform og dokumentasjon
+
+All utvikling skjer iterativt med git pull → endre → commit → push.
+
+Vi dokumenterer fortløpende i DEV_GUIDE.md og LOGG.md.
+
+Hver større milepæl skal avsluttes med en kort teknisk refleksjon og plan for neste steg.
+
+AI-assistenten brukes som både utviklingspartner og faglig diskusjonspartner.
+
+---------------------------------------------
+
 🧩 1. Prosjektstruktur (React + Vite + Three + Cannon-ES)
 src/
  ├─ main.jsx           → Inngangspunkt (renderer App)
