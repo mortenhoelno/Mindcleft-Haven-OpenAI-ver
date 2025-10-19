@@ -1,86 +1,107 @@
-📘 DEV_GUIDE.md
-Mindcleft Haven – Utviklingsmanual
-🧩 1. Prosjektstruktur (React + Vite)
+🧠 MindCleft Haven – Utviklingshåndbok (Dev Guide)
+
+Denne guiden oppsummerer hvordan prosjektet bygges, oppdateres og vedlikeholdes — både teknisk og praktisk.
+Den kombinerer tidligere erfaringer, feilløsninger og nye beslutninger for å sikre stabilitet, hastighet og forutsigbarhet i videre utvikling.
+
+🧩 1. Prosjektstruktur (React + Vite + Three + Cannon-ES)
 src/
+ ├─ main.jsx           → Inngangspunkt (renderer App)
+ ├─ App.jsx            → Hovedkomponent
+ ├─ styles.css         → Globale stiler
  ├─ components/
- │   ├─ App.jsx         → Hovedkomponent (kobler alt sammen)
- │   ├─ Game.jsx        → 3D-verden (Three.js + Rapier)
- │   └─ main.jsx        → Inngangspunkt (render til DOM)
- ├─ styles.css          → Globale stiler
- ├─ index.html          → Roterende app-entry
-vite.config.js          → Vite-oppsett
-package.json            → Avhengigheter og scripts
+ │   ├─ Game.jsx       → 3D-verden (Three.js + Cannon-ES)
+ │   ├─ HUD.jsx        → Overlay og UI
+ │   └─ Loading.jsx    → Visning under init
+ ├─ systems/
+ │   ├─ physics.js     → Cannon-ES-init og fysikkstyring
+ │   ├─ scene.js       → Three.js-scene
+ │   └─ controls.js    → Bevegelse (WASD + mus)
+ ├─ assets/
+ │   ├─ models/
+ │   └─ textures/
+ ├─ utils/             → Små hjelpefunksjoner
+ └─ state/             → Fremtidig global state (Zustand / Supabase)
+vite.config.js         → Vite-oppsett
+package.json           → Avhengigheter og scripts
+
+⚙️ 2. Vite-konfigurasjon
+
+vite.config.js skal bruke Cannon-ES (ikke Rapier):
+
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: { host: true, port: 5173 },
+  optimizeDeps: {
+    include: ["three", "cannon-es"],
+  },
+  build: {
+    target: "esnext",
+    sourcemap: true,
+  },
+});
 
 
-Nøkkelkonsepter:
+Dette sikrer at Cannon-ES pakkes inn riktig både lokalt og i Vercel-builds.
 
-Alle filer som inneholder JSX (React HTML) skal ha .jsx.
+🌐 3. Daglig arbeidsflyt (GitHub ↔ Codespaces)
 
-Dynamiske imports brukes for tunge moduler som Rapier.
-
-Dette prosjektet er bygget for fremtidig bruk av AI, 3D og fysikkmotorer — ikke tradisjonell statisk HTML.
-
-🚀 2. Daglig arbeidsflyt (GitHub ↔ Codespaces)
-Før du starter å jobbe (hver økt):
-git pull --rebase origin main
-
-
-➡️ Henter siste endringer fra GitHub og oppdaterer Codespace.
-Forhindrer konflikter og tapte filer.
-
-Underveis (lagre arbeid ofte):
-git add .
-git commit -m "Kort beskrivelse av endringen"
-
-
-➡️ Tar et “snapshot” av arbeidet ditt.
-Små commits = tryggere gjenoppretting senere.
-
-Etter endt økt (push til GitHub):
-git push origin main
-
-
-➡️ Laster opp alt arbeid slik at GitHub og Codespaces er synkronisert.
-
-💡 Tips:
-
-Bruk git status for å se endringer og git log --oneline for historikk.
-Bruk VS Code’s innebygde Git-funksjoner (✔️, ⬆️, ⬇️) for enkel oversikt.
-
-🔄 3. Rydding og feilsøking av Git-konflikter
-
-Hvis du får en feilmelding som:
-
-Updates were rejected because the remote contains work that you do not have locally
-
-
-→ Kjør:
+Før du starter hver økt:
 
 git pull --rebase origin main
 
 
-Les eventuelle CONFLICT-meldinger i terminalen.
-Løs dem manuelt, lagre filene, og fortsett:
+✅ Henter siste versjoner fra GitHub og oppdaterer Codespace.
+
+Underveis:
 
 git add .
-git rebase --continue
+git commit -m "kort beskrivelse av endringen"
+
+
+Etter økten:
+
 git push origin main
 
-⚙️ 4. Bygge og kjøre prosjektet
-Start utviklingsserver:
+
+🚀 Pusher endringene slik at GitHub og Vercel automatisk bygger på nytt.
+
+💡 Bruk git status og git log --oneline ofte.
+
+🔄 4. Feilhåndtering og synkronisering
+Situasjon	Kommando	Forklaring
+Lokalt og GitHub er ute av sync	git pull --rebase origin main	Oppdaterer lokalt uten å miste endringer
+Du vet at GitHub har riktig versjon	git fetch origin && git reset --hard origin/main	Nullstiller lokalt og henter eksakt fra GitHub
+Avhengigheter mangler	npm install	Leser package.json og gjenoppretter alt
+Vil låse fungerende versjon	git add package*.json && git commit -m "Lock deps"	Sikrer identiske miljøer for alle
+🧱 5. Bygg og kjøring
+
+Start utvikling:
+
 npm run dev
 
 
-Serveren starter på:
-👉 http://localhost:5173
+➡️ Starter lokal server på http://localhost:5173
 
-Tvungen rebuild (rydder cache):
+Test produksjonsbygg lokalt:
+
+npm run build
+npm run preview
+
+
+Full refresh (rydder cache):
+
 npm run dev -- --force
 
-📦 5. Oppdatere Node og avhengigheter
-Bytt Node-versjon (bruk nvm):
+🔧 6. Node- og NPM-vedlikehold
+
+Bruk alltid Node 22.x:
+
 nvm install 22
 nvm use 22
+nvm alias default 22
 
 
 Sjekk:
@@ -88,121 +109,89 @@ Sjekk:
 node -v
 npm -v
 
-Oppdatere pakker:
+
+Oppdater pakker:
+
 npm update
 
-Fjern og installer alt på nytt (ved feil):
+
+Rydd opp ved feil:
+
 rm -rf node_modules package-lock.json
 npm install
 
-🧠 6. Når du legger til nye filer
-
-Gi komponenten .jsx-ending hvis den inneholder HTML/JSX.
-
-Eksporter alltid med:
-
-export default function Navn() { ... }
-
-
-Importer den slik:
-
-import Navn from "./components/Navn.jsx";
-
-🌐 7. Moderne importregler
-
-Bruk alltid:
-
-import * as THREE from "three";
-const RAPIER = (await import("@dimforge/rapier3d-compat")).default;
-
-
-Unngå:
-❌ Eksterne URL-er som https://cdn.jsdelivr.net/...
-Disse fører til 404-feil og treg lasting i moderne byggesystemer.
-
-🧩 8. Tips for stabilitet i Vite
-
-Bruk --force når ting ikke oppdateres riktig
-
-Sørg for at vite.config.js ikke peker til gamle CDN-stier
-
-Fjern .js- og .jsx-duplikater før commit (kun én skal eksistere)
-
-🛠️ 9. Feilsøking av vanlige feil
-Feil i nettleser	Årsak	Løsning
-Failed to load rapier.es.js (404)	Henter fra CDN	Fjern gammel import, bruk npm-modulen
+🧠 7. Vanlige feil og raske løsninger
+Feil i konsoll	Årsak	Løsning
+Rollup failed to resolve import "cannon-es"	Vite finner ikke modulen	Sørg for include: ["cannon-es"] i vite.config.js
 JSX syntax not enabled	Fil heter .js	Endre til .jsx
-vite failed to scan for dependencies	Cachefeil	npm run dev -- --force
-Updates were rejected	Lokalt/GitHub ut av sync	git pull --rebase origin main
-🔐 10. Trygghetsrutine – alltid før du lukker Codespace
+404 ved lasting av modeller	Feil sti	Bruk relative imports (./assets/...)
+NotAllowedError: Pointer Lock	Nettleseren krever brukerklikk	Legg til “Klikk for å starte”-knapp eller ignorer feilen
+Svart skjerm	Renderfeil	Sjekk camera.position og lyssetting
+🪄 8. Pointer-Lock-info
+
+Chrome og Firefox krever brukerinteraksjon før requestPointerLock() aktiveres.
+Du kan legge til:
+
+renderer.domElement.addEventListener("click", () => {
+  try {
+    renderer.domElement.requestPointerLock();
+  } catch (e) {
+    console.warn("User interaction required for pointer lock");
+  }
+});
+
+🚀 9. Vercel-deploy
+
+Hver git push til main → automatisk bygg og deploy.
+
+Vercel bruker alltid package-lock.json for å installere identiske versjoner.
+
+Grønt bygg = produksjon klar.
+
+Sjekk bygglogg under https://vercel.com/dashboard.
+
+🧩 10. Læringspunkter fra utviklingsreisen
+
+Git-disiplin:
+Kjør git pull --rebase før alt arbeid – alltid.
+
+WASM vs JS-motor:
+Cannon-ES ble valgt for stabilitet og enkel distribusjon.
+
+Vite-strikt:
+Alt må defineres eksplisitt i vite.config.js for å fungere i prod.
+
+PointerLock-policy:
+Ikke en feil, men en nettleserbeskyttelse.
+
+Node-versjon:
+NVM-styrt Node 22.x gir kompatibilitet og ytelse.
+
+Cannon-ES fungerer perfekt både lokalt og i Vercel — ingen WASM-feil, ingen dynamisk importproblemer.
+
+Vite + React 19 gir rask hot-reload og moderne modulhåndtering.
+
+💾 11. Trygghetsrutine (før du lukker Codespace)
 git add .
 git commit -m "dagens arbeid"
 git push origin main
 
 
-Dette sikrer at:
 ✅ Alt ligger trygt i GitHub
-✅ Du kan åpne prosjektet fra hvor som helst
-✅ Ingen lokal data går tapt selv om Codespace blir slettet
+✅ Du kan åpne prosjektet hvor som helst
+✅ Ingen lokal data går tapt, selv om Codespace slettes
 
-Her er 5 korte, nyttige læringspunkter du bør legge inn i dev-guiden under seksjonen
-👉 “Når ting ikke synkroniserer mellom Codespaces og GitHub”
+📘 12. Neste utviklingsfase
 
-🧭 1️⃣ Sjekk alltid Git-status før du begynner å feilsøke
+Terreng og bevegelse:
 
-Bruk:
+Legg til “ground plane” med høy friksjon (Cannon + Three).
 
-git status
+Synk fysikk og kamera (WASD + mus).
 
+Utvid senere til terrengmesh eller heightmap.
 
-Det avslører umiddelbart hvor problemet ligger — om en fil er slettet, ikke pushet, eller i konflikt.
+🧾 Sist oppdatert:
 
-Dette sparer ofte 30–60 minutter med gjetting.
-
-🔁 2️⃣ Tving synk fra GitHub til Codespaces
-
-Når du vet at GitHub har den riktige versjonen, bruk:
-
-git fetch origin
-git reset --hard origin/main
-
-
-Dette nullstiller alt lokalt og henter eksakt siste versjon fra GitHub.
-Perfekt når Codespaces henger igjen etter feil eller midlertidig sync-brudd.
-
-🧩 3️⃣ Installer manglende pakker etterpå, ikke før
-
-Etter reset --hard, kjør alltid:
-
-npm install
-
-
-for å hente dependencies fra package.json.
-👉 Dette sikrer at alt som ligger i GitHub faktisk blir fysisk installert lokalt.
-
-🧱 4️⃣ Lås versjonene etter suksess
-
-Når prosjektet fungerer, lås det slik:
-
-git add package.json package-lock.json
-git commit -m "Lock working dependency versions"
-git push
-
-
-Dette gjør at Vercel, Codespaces og andre utviklere aldri får avvikende pakkeversjoner igjen.
-
-🧠 5️⃣ Verifiser med sanity check før du bygger
-
-Lag en mini-test i dev-guiden (du kan kalle den “Sanity check”):
-
-npm list @dimforge/rapier3d-compat three react vite
-
-npm run dev
-
-Se at konsollen viser “✅ Rapier initialized successfully”
-
-Åpne browser og bekreft ingen 404
-
-Tar under 1 minutt – men fanger 95 % av alle miljøfeil.
-
-
+19. oktober 2025 – av Morten Hoel & GPT-5
+Fysikkmotor byttet fra Rapier til Cannon-ES, byggprosess stabilisert, Vercel deploy OK ✅
