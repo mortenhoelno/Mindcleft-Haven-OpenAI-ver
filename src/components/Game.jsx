@@ -14,7 +14,7 @@ export default function Game() {
     let controls;
 
     const init = () => {
-      // --- THREE SCENE SETUP ---
+      // --- SCENE ---
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87ceeb);
 
@@ -31,30 +31,30 @@ export default function Game() {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       mountRef.current.appendChild(renderer.domElement);
 
-      // --- LIGHTS ---
+      // --- LIGHT ---
       const light = new THREE.DirectionalLight(0xffffff, 1.2);
       light.position.set(5, 10, 7.5);
       scene.add(light);
       scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-      // --- ORBIT CONTROLS ---
+      // --- CONTROLS ---
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.enablePan = false;
       controls.enableZoom = true;
 
-      // --- PHYSICS WORLD (CANNON) ---
+      // --- PHYSICS (CANNON) ---
       world = new CANNON.World();
       world.gravity.set(0, -9.82, 0);
 
-      // --- FLOOR ---
+      // Floor
       const floorShape = new CANNON.Plane();
       floorBody = new CANNON.Body({ mass: 0 });
       floorBody.addShape(floorShape);
       floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
       world.addBody(floorBody);
 
-      const floorGeo = new THREE.PlaneGeometry(200, 200, 10, 10);
+      const floorGeo = new THREE.PlaneGeometry(200, 200);
       const floorMat = new THREE.MeshStandardMaterial({
         color: 0x777777,
         side: THREE.DoubleSide,
@@ -63,7 +63,7 @@ export default function Game() {
       floorMesh.rotation.x = -Math.PI / 2;
       scene.add(floorMesh);
 
-      // --- PLAYER ---
+      // Player
       const playerShape = new CANNON.Sphere(0.5);
       playerBody = new CANNON.Body({
         mass: 1,
@@ -82,7 +82,7 @@ export default function Game() {
       playerGroup.add(camera);
       scene.add(playerGroup);
 
-      // --- MOVEMENT ---
+      // Movement
       const keys = { w: false, a: false, s: false, d: false };
       const speed = 5;
       let pitch = 0;
@@ -113,7 +113,7 @@ export default function Game() {
       });
       document.addEventListener("mousemove", onMouseMove);
 
-      // --- ANIMATION LOOP ---
+      // Animation
       const animate = () => {
         animationId = requestAnimationFrame(animate);
         const moveDir = new THREE.Vector3();
@@ -160,7 +160,6 @@ export default function Game() {
 
       animate();
 
-      // --- CLEANUP ---
       window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
