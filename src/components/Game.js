@@ -1,155 +1,178 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
+import RAPIER from "https://esm.sh/@dimforge/rapier3d-compat";
 
 export default function Game() {
   const mountRef = useRef(null);
-  const rafRef = useRef(0);
 
   useEffect(() => {
-    // --- SCENE & RENDERER ---
-    const container = mountRef.current;
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
+    let scene, camera, renderer;
+    let world, playerBody;
+    let playerGroup;
+    let animationId;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: "high-performance"
-    });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    container.appendChild(renderer.domElement);
+    const init = async () => {
+      await RAPIER.init();
 
-    // --- CAMERA & PLAYER ---
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      500
-    );
-    camera.position.set(0, 1.5, 0);
+      // --- THREE SETUP ---
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87ceeb);
 
-    // Player-gruppe (flytter alt som tilhører spilleren)
-    const player = new THREE.Group();
-    player.position.set(0, 1.5, 5);
-    player.add(camera);
-    scene.add(player);
-
-    // --- LIGHTING ---
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(10, 10, 10);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-
-    // --- SIMPLE FLOOR (referanse) ---
-    const floorGeo = new THREE.PlaneGeometry(200, 200, 1, 1);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x222222,
-      side: THREE.DoubleSide
-    });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    scene.add(floor);
-
-    // --- INPUT STATE ---
-    const keys = { w: false, a: false, s: false, d: false };
-    const rotation = { yaw: 0, pitch: 0 };
-    let isPointerLocked = false;
-
-    // --- POINTER LOCK FOR MOUSE LOOK ---
-    const onClick = () => {
-      renderer.domElement.requestPointerLock();
-    };
-    const onPointerLockChange = () => {
-      isPointerLocked = document.pointerLockElement === renderer.domElement;
-    };
-    document.addEventListener("pointerlockchange", onPointerLockChange);
-    renderer.domElement.addEventListener("click", onClick);
-
-    // --- MOUSE MOVEMENT ---
-    const onMouseMove = (event) => {
-      if (!isPointerLocked) return;
-      const sensitivity = 0.0025;
-      rotation.yaw -= event.movementX * sensitivity;
-      rotation.pitch -= event.movementY * sensitivity;
-      rotation.pitch = Math.max(
-        -Math.PI / 2 + 0.1,
-        Math.min(Math.PI / 2 - 0.1, rotation.pitch)
-      );
-    };
-    window.addEventListener("mousemove", onMouseMove);
-
-    // --- KEYBOARD ---
-    const onKeyDown = (e) => {
-      if (e.key in keys) keys[e.key] = true;
-    };
-    const onKeyUp = (e) => {
-      if (e.key in keys) keys[e.key] = false;
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-
-    // --- ANIMATION LOOP ---
-    const clock = new THREE.Clock();
-
-    const animate = () => {
-      const delta = clock.getDelta();
-      const moveSpeed = 5 * delta;
-
-      // Roter spiller (yaw = venstre/høyre)
-      player.rotation.y = rotation.yaw;
-      // Roter kamera for pitch (opp/ned)
-      camera.rotation.x = rotation.pitch;
-
-      // Fremover/tilbake
-      const forward = new THREE.Vector3(
-        Math.sin(rotation.yaw),
-        0,
-        Math.cos(rotation.yaw)
-      );
-      const right = new THREE.Vector3(
-        Math.cos(rotation.yaw),
-        0,
-        -Math.sin(rotation.yaw)
+      camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        200
       );
 
-      if (keys.w) player.position.addScaledVector(forward, -moveSpeed);
-      if (keys.s) player.position.addScaledVector(forward, moveSpeed);
-      if (keys.a) player.position.addScaledVector(right, -moveSpeed);
-      if (keys.d) player.position.addScaledVector(right, moveSpeed);
-
-      renderer.render(scene, camera);
-      rafRef.current = requestAnimationFrame(animate);
-    };
-
-    rafRef.current = requestAnimationFrame(animate);
-
-    // --- RESIZE ---
-    const onResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
+      renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
-    };
-    window.addEventListener("resize", onResize);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      mountRef.current.appendChild(renderer.domElement);
 
-    // --- CLEANUP ---
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("pointerlockchange", onPointerLockChange);
-      renderer.domElement.removeEventListener("click", onClick);
-      renderer.dispose();
-      floorGeo.dispose();
-      floorMat.dispose();
-      if (renderer.domElement && renderer.domElement.parentNode)
-        renderer.domElement.parentNode.removeChild(renderer.domElement);
+      const light = new THREE.DirectionalLight(0xffffff, 1.2);
+      light.position.set(5, 10, 7.5);
+      scene.add(light);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambient);
+
+      // --- RAPIER WORLD SETUP ---
+      world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+
+      // Floor physics
+      const floorDesc = RAPIER.ColliderDesc.cuboid(100, 0.1, 100);
+      world.createCollider(floorDesc);
+
+      // Floor visual
+      const floorGeo = new THREE.PlaneGeometry(200, 200, 10, 10);
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: 0x777777,
+        side: THREE.DoubleSide,
+      });
+      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      scene.add(floorMesh);
+
+      // --- PLAYER ---
+      playerGroup = new THREE.Group();
+      camera.position.set(0, 1.5, 0);
+      playerGroup.add(camera);
+      scene.add(playerGroup);
+
+      // Rapier player body (capsule)
+      const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 5, 0);
+      playerBody = world.createRigidBody(bodyDesc);
+      const colliderDesc = RAPIER.ColliderDesc.capsule(0.75, 0.25)
+        .setMass(1)
+        .setActiveEvents(RAPIER.ActiveEvents.CONTACT_EVENTS);
+      world.createCollider(colliderDesc, playerBody);
+
+      // --- MOVEMENT ---
+      const keys = { w: false, a: false, s: false, d: false };
+      const speed = 5;
+      const vel = new RAPIER.Vector3(0, 0, 0);
+      let pitch = 0;
+      let yaw = 0;
+
+      const onKeyDown = (e) => {
+        const k = e.key.toLowerCase();
+        if (k in keys) keys[k] = true;
+      };
+      const onKeyUp = (e) => {
+        const k = e.key.toLowerCase();
+        if (k in keys) keys[k] = false;
+      };
+
+      document.addEventListener("keydown", onKeyDown);
+      document.addEventListener("keyup", onKeyUp);
+
+      const onMouseMove = (e) => {
+        if (document.pointerLockElement === renderer.domElement) {
+          yaw -= e.movementX * 0.002;
+          pitch -= e.movementY * 0.002;
+          pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+        }
+      };
+
+      renderer.domElement.addEventListener("click", () => {
+        renderer.domElement.requestPointerLock();
+      });
+      document.addEventListener("mousemove", onMouseMove);
+
+      // --- ANIMATION LOOP ---
+      const animate = () => {
+        animationId = requestAnimationFrame(animate);
+
+        // Input -> velocity
+        vel.x = 0;
+        vel.z = 0;
+
+        if (keys.w) vel.z -= 1;
+        if (keys.s) vel.z += 1;
+        if (keys.a) vel.x -= 1;
+        if (keys.d) vel.x += 1;
+
+        // Rotasjon fra mus
+        playerGroup.rotation.y = yaw;
+        camera.rotation.x = pitch;
+
+        // Foroverretning relativ til yaw
+        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          yaw
+        );
+        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          yaw
+        );
+
+        const moveDir = new THREE.Vector3();
+        moveDir.addScaledVector(forward, vel.z);
+        moveDir.addScaledVector(right, vel.x);
+        if (moveDir.length() > 0) moveDir.normalize();
+
+        const linvel = playerBody.linvel();
+        playerBody.setLinvel(
+          {
+            x: moveDir.x * speed,
+            y: linvel.y,
+            z: moveDir.z * speed,
+          },
+          true
+        );
+
+        world.step();
+
+        const t = playerBody.translation();
+        playerGroup.position.set(t.x, t.y - 0.75, t.z);
+
+        renderer.render(scene, camera);
+      };
+
+      animate();
+
+      // --- CLEANUP ---
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      return () => {
+        cancelAnimationFrame(animationId);
+        document.removeEventListener("keydown", onKeyDown);
+        document.removeEventListener("keyup", onKeyUp);
+        document.removeEventListener("mousemove", onMouseMove);
+        renderer.dispose();
+        mountRef.current.removeChild(renderer.domElement);
+      };
     };
+
+    init();
+
+    return () => {};
   }, []);
 
-  return React.createElement("div", {
-    ref: mountRef,
-    style: { width: "100%", height: "100%" },
-  });
+  return <div ref={mountRef} style={{ width: "100vw", height: "100vh" }} />;
 }
