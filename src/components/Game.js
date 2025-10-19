@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import RAPIER from "https://esm.sh/@dimforge/rapier3d-compat";
+import RAPIER from "https://esm.sh/@dimforge/rapier3d-compat@0.13.1";
 
 export default function Game() {
   const mountRef = useRef(null);
