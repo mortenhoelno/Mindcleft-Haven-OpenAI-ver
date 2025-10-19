@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.13.1/dist/rapier.es.js";
 
 export default function Game() {
   const mountRef = useRef(null);
@@ -12,7 +11,10 @@ export default function Game() {
     let animationId;
 
     const init = async () => {
+      // Dynamisk import for å sikre riktig lasting av wasm-fil
+      const RAPIER = (await import("@dimforge/rapier3d-compat")).default;
       await RAPIER.init();
+      console.log("✅ Rapier initialized successfully");
 
       // --- THREE SETUP ---
       scene = new THREE.Scene();
@@ -104,20 +106,16 @@ export default function Game() {
       const animate = () => {
         animationId = requestAnimationFrame(animate);
 
-        // Input -> velocity
         vel.x = 0;
         vel.z = 0;
-
         if (keys.w) vel.z -= 1;
         if (keys.s) vel.z += 1;
         if (keys.a) vel.x -= 1;
         if (keys.d) vel.x += 1;
 
-        // Rotasjon fra mus
         playerGroup.rotation.y = yaw;
         camera.rotation.x = pitch;
 
-        // Foroverretning relativ til yaw
         const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
           new THREE.Vector3(0, 1, 0),
           yaw
